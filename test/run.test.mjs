@@ -67,11 +67,16 @@ test('run, shard, merge and judge', { timeout: 240_000 }, async (t) => {
     const m = cli('merge', a, b, '--out', path.join(scratch, 'merged'), '--flows', FLOWS, '--fail-on', 'none');
     assert.equal(m.status, 0, m.stderr);
     const merged = read(path.join(scratch, 'merged')).report;
-    assert.deepEqual(merged.coverage, { missing: [], duplicated: [], unexpected: [] });
+    assert.deepEqual(merged.coverage, { missing: [], duplicated: [], unexpected: [], timedOut: [], missingReports: [], mode: 'gated', failing: [], advisory: [] });
     assert.equal(merged.summary.units, 5);
+    // Failing on nothing, every flow is advisory: shard 1 counted twice and shard 2 missing are coverage findings.
     const dup = cli('merge', a, a, '--out', path.join(scratch, 'dup'), '--flows', FLOWS, '--fail-on', 'none');
-    assert.equal(dup.status, 3, 'a shard counted twice and one missing fail the guard');
-    assert.match(dup.stderr, /duplicated [1-9]/);
+    assert.equal(dup.status, 0, dup.stderr);
+    assert.equal(read(path.join(scratch, 'dup')).findings.filter((f) => f.check === 'coverage').length, 5);
+    const strict = cli('merge', a, a, '--out', path.join(scratch, 'dup'), '--flows', FLOWS, '--fail-on', 'none', '--coverage', 'strict');
+    assert.equal(strict.status, 3, 'strict: a shard counted twice and one missing fail the guard');
+    assert.match(strict.stderr, /duplicated [1-9]/);
+    assert.equal(cli('merge', a, a, '--out', path.join(scratch, 'dup'), '--flows', FLOWS, '--fail-on', 'overflow').status, 3, 'gated: so do they');
     const times = path.join(scratch, 'times.json');
     cli('times', a, b, '--out', times);
     assert.equal(Object.keys(JSON.parse(fs.readFileSync(times, 'utf8')).units).length, 5);

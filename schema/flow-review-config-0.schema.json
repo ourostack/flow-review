@@ -129,6 +129,28 @@
                 "type": "string"
               },
               "description": "Values for {name} placeholders in steps (saves add to them)."
+            },
+            "timeouts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cellMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                },
+                "stepMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one step may take (default 60000): a hung goto, act or waitFor fails that step, naming its target. A waitFor with a longer ms gets that ms and 5 s more; an agent step's own timeoutMs wins."
+                }
+              },
+              "description": "Time limits for this config's web flows, over the config's own."
+            },
+            "failOn": {
+              "type": "string",
+              "pattern": "^(any|none|[A-Za-z]+(,[A-Za-z]+)*)$",
+              "description": "What fails the run for this config's web flows, over the config's own: any, none or a comma list of checks, in place of --fail-on. A flow that fails on nothing is advisory: when merge finds its cells missing, run twice or timed out, they become coverage findings, not a failed merge."
             }
           }
         },
@@ -242,6 +264,28 @@
                 "type": "string"
               },
               "description": "Values for {name} placeholders in steps (saves add to them)."
+            },
+            "timeouts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cellMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                },
+                "stepMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one step may take (default 60000): a hung goto, act or waitFor fails that step, naming its target. A waitFor with a longer ms gets that ms and 5 s more; an agent step's own timeoutMs wins."
+                }
+              },
+              "description": "Time limits for this config's cdp flows, over the config's own."
+            },
+            "failOn": {
+              "type": "string",
+              "pattern": "^(any|none|[A-Za-z]+(,[A-Za-z]+)*)$",
+              "description": "What fails the run for this config's cdp flows, over the config's own: any, none or a comma list of checks, in place of --fail-on. A flow that fails on nothing is advisory: when merge finds its cells missing, run twice or timed out, they become coverage findings, not a failed merge."
             }
           }
         },
@@ -355,6 +399,28 @@
                 "type": "string"
               },
               "description": "Values for {name} placeholders in steps (saves add to them)."
+            },
+            "timeouts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cellMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                },
+                "stepMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one step may take (default 60000): a hung goto, act or waitFor fails that step, naming its target. A waitFor with a longer ms gets that ms and 5 s more; an agent step's own timeoutMs wins."
+                }
+              },
+              "description": "Time limits for this config's agent-cli flows, over the config's own."
+            },
+            "failOn": {
+              "type": "string",
+              "pattern": "^(any|none|[A-Za-z]+(,[A-Za-z]+)*)$",
+              "description": "What fails the run for this config's agent-cli flows, over the config's own: any, none or a comma list of checks, in place of --fail-on. A flow that fails on nothing is advisory: when merge finds its cells missing, run twice or timed out, they become coverage findings, not a failed merge."
             }
           }
         },
@@ -468,6 +534,28 @@
                 "type": "string"
               },
               "description": "Values for {name} placeholders in steps (saves add to them)."
+            },
+            "timeouts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cellMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                },
+                "stepMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The most one step may take (default 60000): a hung goto, act or waitFor fails that step, naming its target. A waitFor with a longer ms gets that ms and 5 s more; an agent step's own timeoutMs wins."
+                }
+              },
+              "description": "Time limits for this config's agent-http flows, over the config's own."
+            },
+            "failOn": {
+              "type": "string",
+              "pattern": "^(any|none|[A-Za-z]+(,[A-Za-z]+)*)$",
+              "description": "What fails the run for this config's agent-http flows, over the config's own: any, none or a comma list of checks, in place of --fail-on. A flow that fails on nothing is advisory: when merge finds its cells missing, run twice or timed out, they become coverage findings, not a failed merge."
             }
           }
         }
@@ -479,6 +567,28 @@
         "type": "string"
       },
       "description": "Another runner's check names, as flows' `known` may use them: old name -> check (a name with a dot also matches by what comes before it)."
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cellMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+        },
+        "stepMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most one step may take (default 60000): a hung goto, act or waitFor fails that step, naming its target. A waitFor with a longer ms gets that ms and 5 s more; an agent step's own timeoutMs wins."
+        }
+      },
+      "description": "Time limits for every flow under this config."
+    },
+    "failOn": {
+      "type": "string",
+      "pattern": "^(any|none|[A-Za-z]+(,[A-Za-z]+)*)$",
+      "description": "What fails the run for every flow under this config: any, none or a comma list of checks, in place of --fail-on. A flow that fails on nothing is advisory: when merge finds its cells missing, run twice or timed out, they become coverage findings, not a failed merge."
     }
   },
   "definitions": {

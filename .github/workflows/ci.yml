@@ -76,3 +76,33 @@ jobs:
           reports: shards/*
           flows: test/fixtures/flows/*.flow.ts test/fixtures/flows/*.flow.json
           fail-on: none
+
+  # The merge as it runs when a shard was cancelled: shard 2's folder holds no report. The fixture flows fail on
+  # nothing here, so their missing cells are coverage findings under a notice, and the merge passes.
+  merge-cancelled-shard:
+    needs: action
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: flow-review-1-of-2
+          path: shards/flow-review-1-of-2
+      - run: mkdir -p shards/flow-review-2-of-2
+      - id: merge
+        uses: ./
+        with:
+          command: merge
+          reports: shards/*
+          flows: test/fixtures/flows/*.flow.ts test/fixtures/flows/*.flow.json
+          artifact-name: flow-review-cancelled-shard
+          fail-on: none
+      - env:
+          EXIT_CODE: ${{ steps.merge.outputs.exit-code }}
+        run: |
+          test "$EXIT_CODE" = 0
+          grep -q '"check":"coverage"' report/findings.jsonl
+          node -e 'const c = require("./report/report.json").coverage; if (!c.advisory.length || c.failing.length || c.missingReports.length !== 1) process.exit(1)'

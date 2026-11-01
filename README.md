@@ -9,7 +9,7 @@ It runs locally and in CI, and every check is also a plain function another repo
 Node 22.18 or newer. From the product repository:
 
 ```sh
-npm install --save-dev github:ourostack/flow-review#v0.3.0 && npx playwright install --only-shell chromium
+npm install --save-dev github:ourostack/flow-review#v0.3.1 && npx playwright install --only-shell chromium
 npx flow-review run                  # flows/**/*.flow.{ts,json}
 npx flow-review run 'flows/site/*.flow.ts' --only axe,contrast --fail-on none
 ```
@@ -18,9 +18,9 @@ In CI, use the action instead ([In CI](#in-ci)): it installs everything itself.
 
 | Command | Does |
 | --- | --- |
-| `run [globs] --out report --shard k/n --fail-on any\|none\|<checks> --only <checks> --times <file> --workers n` | Runs flows. Exit 1 when a check named by `--fail-on` fails (default `any`). |
+| `run [globs] --out report --shard k/n --fail-on any\|none\|<checks> --only <checks> --times <file> --workers n` | Runs flows. Exit 1 when a check named by `--fail-on` (or the flow's own `failOn`) fails (default `any`). |
 | `list [globs] --shard k/n --times <file>` | Prints how shards split the units, without running. |
-| `merge <report dirs> --out report --flows <glob>` | Combines shard reports. Exit 3 unless every unit ran exactly once. |
+| `merge <report dirs> --out report --flows <glob> --coverage gated\|strict` | Combines shard reports. Exit 3 when a gated unit didn't run exactly once ([Coverage](#coverage-cancelled-shards-and-advisory-flows)). |
 | `times <report dirs> --out flows/flow-review-times.json` | Records each unit's time, so the next run's shards balance by time. |
 | `judge --merge <answer.json> --report report` | Validates judges' rubric answers and folds them into `report.json`. |
 | `schema flow\|report\|finding\|rubric` | Prints a published JSON Schema. |
@@ -72,6 +72,8 @@ The flow file needs nothing installed: flow-review resolves `@ourostack/flow-rev
   A product can type its agent flows with its own definitions and extra fields: `test/fixtures/ax/` runs a flow written against its own `define.ts`, unchanged, on a stand-in mock and CLI.
 - **Matrix:** each viewport × theme × reduced-motion combination is a cell. Themes come from `prefers-color-scheme`, or from the flow's own `themeSteps` (`matrix.themeVia: "steps"`), for an app with its own toggle.
 - **Fixtures:** `fixtures.route` answers matching requests from a file, `json`, `body` or `status`. Requests to other origins are aborted (`app.blockExternal: false` allows them), so runs don't depend on the network.
+- **Time limits:** `timeouts: { cellMs, stepMs }`. A cell (one matrix cell, or an agent flow's one unit, its app start included) may take `cellMs` (default 120000). Past it, the engine stops the cell: it closes its page (a `cdp` browser is only disconnected), kills its running command, and stops its app when the app was still starting, is the flow's own (`scope: "flow"`) or no longer answers. A `timeout` finding names the step it was on, that step's target and the time, and the run goes on with the next cell, so a shard always finishes and writes its report. A step may take `stepMs` (default 60000): a `goto`, `act` or `waitFor` that hangs fails that step, naming its target in `selector`. A `waitFor` with a longer `ms` gets that `ms` and 5 s more, and an agent step's own `timeoutMs` wins. A flow's `timeouts` go over its config's.
+- **What fails it:** `failOn` (`any`, `none` or a comma list of checks) takes the place of `--fail-on` for this flow. A flow failing on `none` is advisory ([Coverage](#coverage-cancelled-shards-and-advisory-flows)).
 
 ## Placeholders and the config file
 
@@ -107,6 +109,8 @@ The placeholders are:
 - `${start.<field>}`: a field of the JSON line the app prints when `ready` is `"stdout-json"`, for ports it picks itself.
 
 `{name}` in a step comes from `vars` and from earlier steps' `save`.
+
+The config may also set `timeouts` and `failOn`, at its top level or per surface (`surfaces.web.failOn`), for every flow under it. A flow's own win, then its surface's, then the config's; without any, `--fail-on` and the default time limits apply.
 
 Agent flows run one at a time, in file order, so flows that share one mock see each other's writes in a fixed order. `app.scope: "flow"` gives each flow a fresh app instead. `app.guard` runs once the app is up and must exit 0. `app.files` are written before it starts. With `app.help`, the `listed` check fails when a command the flow runs successfully isn't in the CLI's top-level help.
 
@@ -153,7 +157,9 @@ Checks run at every `capture` and at the end of the flow. Keyboard and focus run
 | `readOnly` | a `readOnly` flow changed what `app.stateProbe` prints | — |
 | `listed` | a command the flow runs to success isn't in the CLI's top-level help (`app.help`) | — |
 | `known` | a step marked `known` passes now: remove the mark | — |
-| `step` | a step can't be done (its target isn't there) | — |
+| `step` | a step can't be done (its target isn't there, or it ran past `timeouts.stepMs`). It fails whatever checks `--fail-on` names | `timeouts.stepMs` (60000) |
+| `timeout` | a cell ran past its time limit and was stopped. Like `step`, it fails whatever checks `--fail-on` names | `timeouts.cellMs` (120000) |
+| `coverage` | merge only: a unit of an advisory flow didn't run, ran twice or timed out. Never fails a run or merge by itself | — |
 
 `checks.only` and `checks.skip` choose checks per flow; `checks.ignore` is a selector every check leaves out.
 
@@ -194,7 +200,7 @@ jobs:
     strategy: { fail-fast: false, matrix: { shard: [1/4, 2/4, 3/4, 4/4] } }
     steps:
       - uses: actions/checkout@v4
-      - uses: ourostack/flow-review@v0.3.0
+      - uses: ourostack/flow-review@v0.3.1
         with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", fail-on: none }
   merge:
     needs: review
@@ -203,13 +209,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "flow-review-*-of-*", path: shards }
-      - uses: ourostack/flow-review@v0.3.0
+      - uses: ourostack/flow-review@v0.3.1
         with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", fail-on: none }
 ```
 
 Where a repository's Actions policy doesn't allow outside actions, copy this repository at a release tag into the repository as a local action (`uses: ./.github/actions/flow-review`) and record the tag and commit beside it.
 
-Shards split matrix cells. With `flows/flow-review-times.json` (from `flow-review times`), they split by each cell's recorded time, longest first into the shard with least so far; without it, by count. `merge` fails when any cell ran twice or not at all.
+Shards split matrix cells. With `flows/flow-review-times.json` (from `flow-review times`), they split by each cell's recorded time, longest first into the shard with least so far; without it, by count.
+
+### Coverage, cancelled shards and advisory flows
+
+`merge` checks that every unit of `--flows` ran exactly once. What a gap means depends on whether the unit's flow gates:
+
+- A flow **gates** when it fails on something: its own `failOn`, else its config's, else `--fail-on`, is anything but `none`. A gated unit that is missing or ran twice fails the merge (exit 3), listed in the summary. A gated unit that timed out fails through its `timeout` finding (exit 1).
+- A flow failing on `none` is **advisory**. Its units that are missing, ran twice or timed out become `coverage` findings (`{ check: "coverage", unit, measured }`), listed under a **Notice:** in the summary and as a notice annotation in CI. They don't fail the merge.
+- A shard that was cancelled, or failed before writing its report, leaves a folder without `report.json`, or none at all. `merge` reads such a folder as a shard whose units are missing, and names it in the summary (`coverage.missingReports` in `report.json`).
+- A unit no flow expects (`--flows` and the shards disagree) always fails.
+- `--coverage strict` (the action's `coverage: strict`) goes back to failing on every missing or duplicated unit, gated or not.
+
+So a run that gates some checks on one set of flows and only reports on others can merge everything with `--fail-on none`: a hung or cancelled advisory shard shows up as findings, not a red merge, while a merge of the gated flows with their `--fail-on` still fails on any gap.
 
 ## Use the checks as conformance tests
 
@@ -227,7 +245,7 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.0`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.1`).
 
 ## Develop
 
@@ -235,7 +253,7 @@ test("buttons meet the bar", async ({ page }) => {
 npm ci && npx playwright install --only-shell chromium && npm test
 ```
 
-The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard and judge answers.
+The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers.
 
 ## Not in v0 yet
 

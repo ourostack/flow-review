@@ -5,7 +5,8 @@ export type CheckName =
   | "axe" | "keyboard" | "focusVisible" | "contrast" | "targetSize" | "overflow" | "deadSpace" | "repetition"
   | "cls" | "jank" | "designSystem" | "proofNotice" | "states" | "errors"
   | "duoOverlap" | "duoReducedMotion" | "duoBytes" | "celebrationCap" | "quietMode"
-  | "exit" | "jsonShape" | "fields" | "stdoutRules" | "stderrRules" | "status" | "text" | "maxMs" | "maxBytes" | "readOnly" | "listed" | "known" | "step";
+  | "exit" | "jsonShape" | "fields" | "stdoutRules" | "stderrRules" | "status" | "text" | "maxMs" | "maxBytes" | "readOnly" | "listed" | "known" | "step"
+  | "timeout" | "coverage";
 
 /** A target found by role and accessible name first; `selector` (CSS) is the fallback. */
 export interface Target {
@@ -222,6 +223,20 @@ export interface Flow {
   /** Judge rubrics this flow's moments go to. */
   rubric?: string[];
   attachments?: { kind: string; path: string; [key: string]: unknown }[];
+  /** Time limits, over the config's (the surface's, then its own). */
+  timeouts?: Timeouts;
+  /**
+   * What fails the run for this flow, in place of --fail-on: "any", "none" or a comma list of checks. A flow failing on
+   * "none" is advisory: when merge finds its units missing, run twice or timed out, they are coverage findings.
+   */
+  failOn?: string;
+}
+
+export interface Timeouts {
+  /** The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped and becomes a timeout finding; the run goes on. */
+  cellMs?: number;
+  /** The most one step may take (default 60000): a hung goto, act or waitFor fails that step. A waitFor's longer ms, and an agent step's own timeoutMs, win. */
+  stepMs?: number;
 }
 
 export interface Finding {

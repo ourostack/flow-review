@@ -1,0 +1,10 @@
+{
+  "schema": "flow-review/0",
+  "name": "Hang fixture: a command that never exits",
+  "surface": "agent-cli",
+  "timeouts": { "cellMs": 3000 },
+  "steps": [
+    { "id": "first", "run": ["node", "-e", "console.log('ok')"], "expect": { "exit": 0 } },
+    { "id": "forever", "run": ["node", "-e", "setInterval(() => {}, 1000)"], "expect": { "exit": 0 } }
+  ]
+}
