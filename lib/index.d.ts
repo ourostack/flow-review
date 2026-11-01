@@ -233,7 +233,7 @@ export interface Flow {
 }
 
 export interface Timeouts {
-  /** The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped and becomes a timeout finding; the run goes on. */
+  /** The most one matrix cell (or agent unit) may take once its app is up (default 120000, or the flow's longest waitFor.ms or step timeoutMs and 30 s more). Past it the cell is stopped and becomes a timeout finding; the run goes on. */
   cellMs?: number;
   /** The most one step may take (default 60000): a hung goto, act or waitFor fails that step. A waitFor's longer ms, and an agent step's own timeoutMs, win. */
   stepMs?: number;

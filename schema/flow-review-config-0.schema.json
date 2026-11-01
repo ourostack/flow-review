@@ -137,7 +137,7 @@
                 "cellMs": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                  "description": "The most one matrix cell (or agent unit) may take once its app is up (default 120000, or the flow's longest waitFor.ms or step timeoutMs and 30 s more). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
                 },
                 "stepMs": {
                   "type": "integer",
@@ -272,7 +272,7 @@
                 "cellMs": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                  "description": "The most one matrix cell (or agent unit) may take once its app is up (default 120000, or the flow's longest waitFor.ms or step timeoutMs and 30 s more). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
                 },
                 "stepMs": {
                   "type": "integer",
@@ -407,7 +407,7 @@
                 "cellMs": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                  "description": "The most one matrix cell (or agent unit) may take once its app is up (default 120000, or the flow's longest waitFor.ms or step timeoutMs and 30 s more). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
                 },
                 "stepMs": {
                   "type": "integer",
@@ -542,7 +542,7 @@
                 "cellMs": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+                  "description": "The most one matrix cell (or agent unit) may take once its app is up (default 120000, or the flow's longest waitFor.ms or step timeoutMs and 30 s more). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
                 },
                 "stepMs": {
                   "type": "integer",
@@ -575,7 +575,7 @@
         "cellMs": {
           "type": "integer",
           "minimum": 1,
-          "description": "The most one matrix cell (or agent unit) may take, its app start included (default 120000). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
+          "description": "The most one matrix cell (or agent unit) may take once its app is up (default 120000, or the flow's longest waitFor.ms or step timeoutMs and 30 s more). Past it the cell is stopped (its page closed, its commands killed), a timeout finding names the step it was on, and the run goes on with the next cell."
         },
         "stepMs": {
           "type": "integer",

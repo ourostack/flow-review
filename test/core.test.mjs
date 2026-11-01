@@ -130,6 +130,11 @@ test('timeouts and failOn: the flow\'s own, over its surface\'s in the config, o
   assert.match(validate('flow', { ...web, timeouts: { cellMs: 0 } }).join(), /cellMs/);
   assert.match(validate('flow', { ...web, timeouts: { hours: 1 } }).join(), /hours/);
   assert.throws(() => policyOf({ ...web, failOn: 'axe,contrst' }, null), /unknown check contrst/);
+  const longWait = { ...web, steps: [{ goto: '/' }, { waitFor: { text: 'Done', ms: 200_000 } }] };
+  assert.equal(policyOf(longWait, null).timeouts.cellMs, 230_000, 'a flow that asks to wait longer gets that wait and 30 s');
+  assert.equal(policyOf({ ...longWait, timeouts: { cellMs: 5000 } }, null).timeouts.cellMs, 5000, 'a cellMs given anywhere stands');
+  assert.equal(policyOf(longWait, { surfaces: { web: { timeouts: { cellMs: 120_000 } } } }).timeouts.cellMs, 120_000);
+  assert.equal(policyOf({ name: 'a', surface: 'agent-cli', steps: [{ run: ['x'], timeoutMs: 150_000 }] }, null).timeouts.cellMs, 180_000);
 });
 
 test('a failing harness call during a step is a step failure, not a crash', async () => {
