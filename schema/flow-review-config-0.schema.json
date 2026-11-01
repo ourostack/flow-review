@@ -1,0 +1,492 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/flow-review-config-0.schema.json",
+  "title": "flow-review-config/0",
+  "description": "flow-review.config.json: what a flow without its own app runs against, per surface. The nearest one above a flow file applies.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "surfaces"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "flow-review-config/0"
+    },
+    "surfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "web": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "app": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "start": {
+                  "type": "string"
+                },
+                "cwd": {
+                  "type": "string"
+                },
+                "env": {
+                  "$ref": "#/definitions/strings"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "string",
+                  "description": "A URL that answers once the app is up (default: url), or \"stdout-json\": up when it prints a JSON object line, whose fields become ${start.<field>}."
+                },
+                "readyTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cdpUrl": {
+                  "type": "string"
+                },
+                "blockExternal": {
+                  "type": "boolean"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "The default target when neither --target nor FLOW_REVIEW_TARGET is given."
+                },
+                "cli": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "agent-cli: the command each run step's argv follows, such as [\"node\", \"${target}\"]."
+                },
+                "cliNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Command names a stderr line may name as the fix (the namesFix rule)."
+                },
+                "controlUrl": {
+                  "type": "string",
+                  "description": "A mock's control port, for harness steps."
+                },
+                "stateProbe": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after app.cli) whose output must not change across a readOnly flow."
+                },
+                "guard": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "argv run once the app is up; it must exit 0 (for example, a check that it is a mock)."
+                },
+                "files": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "base64": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": "Files written (relative to the working directory) before the app starts."
+                },
+                "help": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after cli) that prints the top-level help; every command a flow runs successfully must be listed in it (the listed check)."
+                },
+                "scope": {
+                  "enum": [
+                    "run",
+                    "flow"
+                  ],
+                  "description": "run (default): one app for every flow that starts it the same way; flow: a fresh one for each flow."
+                }
+              }
+            },
+            "vars": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Values for {name} placeholders in steps (saves add to them)."
+            }
+          }
+        },
+        "cdp": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "app": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "start": {
+                  "type": "string"
+                },
+                "cwd": {
+                  "type": "string"
+                },
+                "env": {
+                  "$ref": "#/definitions/strings"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "string",
+                  "description": "A URL that answers once the app is up (default: url), or \"stdout-json\": up when it prints a JSON object line, whose fields become ${start.<field>}."
+                },
+                "readyTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cdpUrl": {
+                  "type": "string"
+                },
+                "blockExternal": {
+                  "type": "boolean"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "The default target when neither --target nor FLOW_REVIEW_TARGET is given."
+                },
+                "cli": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "agent-cli: the command each run step's argv follows, such as [\"node\", \"${target}\"]."
+                },
+                "cliNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Command names a stderr line may name as the fix (the namesFix rule)."
+                },
+                "controlUrl": {
+                  "type": "string",
+                  "description": "A mock's control port, for harness steps."
+                },
+                "stateProbe": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after app.cli) whose output must not change across a readOnly flow."
+                },
+                "guard": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "argv run once the app is up; it must exit 0 (for example, a check that it is a mock)."
+                },
+                "files": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "base64": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": "Files written (relative to the working directory) before the app starts."
+                },
+                "help": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after cli) that prints the top-level help; every command a flow runs successfully must be listed in it (the listed check)."
+                },
+                "scope": {
+                  "enum": [
+                    "run",
+                    "flow"
+                  ],
+                  "description": "run (default): one app for every flow that starts it the same way; flow: a fresh one for each flow."
+                }
+              }
+            },
+            "vars": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Values for {name} placeholders in steps (saves add to them)."
+            }
+          }
+        },
+        "agent-cli": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "app": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "start": {
+                  "type": "string"
+                },
+                "cwd": {
+                  "type": "string"
+                },
+                "env": {
+                  "$ref": "#/definitions/strings"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "string",
+                  "description": "A URL that answers once the app is up (default: url), or \"stdout-json\": up when it prints a JSON object line, whose fields become ${start.<field>}."
+                },
+                "readyTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cdpUrl": {
+                  "type": "string"
+                },
+                "blockExternal": {
+                  "type": "boolean"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "The default target when neither --target nor FLOW_REVIEW_TARGET is given."
+                },
+                "cli": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "agent-cli: the command each run step's argv follows, such as [\"node\", \"${target}\"]."
+                },
+                "cliNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Command names a stderr line may name as the fix (the namesFix rule)."
+                },
+                "controlUrl": {
+                  "type": "string",
+                  "description": "A mock's control port, for harness steps."
+                },
+                "stateProbe": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after app.cli) whose output must not change across a readOnly flow."
+                },
+                "guard": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "argv run once the app is up; it must exit 0 (for example, a check that it is a mock)."
+                },
+                "files": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "base64": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": "Files written (relative to the working directory) before the app starts."
+                },
+                "help": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after cli) that prints the top-level help; every command a flow runs successfully must be listed in it (the listed check)."
+                },
+                "scope": {
+                  "enum": [
+                    "run",
+                    "flow"
+                  ],
+                  "description": "run (default): one app for every flow that starts it the same way; flow: a fresh one for each flow."
+                }
+              }
+            },
+            "vars": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Values for {name} placeholders in steps (saves add to them)."
+            }
+          }
+        },
+        "agent-http": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "app": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "start": {
+                  "type": "string"
+                },
+                "cwd": {
+                  "type": "string"
+                },
+                "env": {
+                  "$ref": "#/definitions/strings"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "string",
+                  "description": "A URL that answers once the app is up (default: url), or \"stdout-json\": up when it prints a JSON object line, whose fields become ${start.<field>}."
+                },
+                "readyTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cdpUrl": {
+                  "type": "string"
+                },
+                "blockExternal": {
+                  "type": "boolean"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "The default target when neither --target nor FLOW_REVIEW_TARGET is given."
+                },
+                "cli": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "agent-cli: the command each run step's argv follows, such as [\"node\", \"${target}\"]."
+                },
+                "cliNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Command names a stderr line may name as the fix (the namesFix rule)."
+                },
+                "controlUrl": {
+                  "type": "string",
+                  "description": "A mock's control port, for harness steps."
+                },
+                "stateProbe": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after app.cli) whose output must not change across a readOnly flow."
+                },
+                "guard": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "argv run once the app is up; it must exit 0 (for example, a check that it is a mock)."
+                },
+                "files": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "base64": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": "Files written (relative to the working directory) before the app starts."
+                },
+                "help": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "agent-cli: argv (after cli) that prints the top-level help; every command a flow runs successfully must be listed in it (the listed check)."
+                },
+                "scope": {
+                  "enum": [
+                    "run",
+                    "flow"
+                  ],
+                  "description": "run (default): one app for every flow that starts it the same way; flow: a fresh one for each flow."
+                }
+              }
+            },
+            "vars": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Values for {name} placeholders in steps (saves add to them)."
+            }
+          }
+        }
+      }
+    },
+    "checkAliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Another runner's check names, as flows' `known` may use them: old name -> check (a name with a dot also matches by what comes before it)."
+    }
+  },
+  "definitions": {
+    "strings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

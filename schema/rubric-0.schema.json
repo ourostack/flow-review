@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/rubric-0.schema.json",
+  "title": "flow-review-rubric/0",
+  "description": "A judge's fixed rubric answer for one judge packet. Judges fill this; they never browse.",
+  "type": "object",
+  "required": ["judge", "verdict", "moments"],
+  "additionalProperties": false,
+  "properties": {
+    "judge": { "type": "string", "minLength": 1 },
+    "rubric": { "type": "string" },
+    "verdict": { "enum": ["approve", "not yet"] },
+    "moments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "cell", "crop", "observation", "fix"],
+        "additionalProperties": false,
+        "properties": {
+          "flow": { "type": "string" },
+          "step": { "type": "string", "minLength": 1 },
+          "cell": {
+            "anyOf": [
+              { "type": "null" },
+              { "type": "string" },
+              { "$ref": "#/definitions/cell" }
+            ]
+          },
+          "crop": { "type": "string" },
+          "observation": { "type": "string", "minLength": 1 },
+          "fix": { "type": "string" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "cell": {
+      "type": "object",
+      "required": ["viewport", "theme", "reducedMotion"],
+      "additionalProperties": false,
+      "properties": { "viewport": { "type": "string" }, "theme": { "enum": ["light", "dark"] }, "reducedMotion": { "type": "boolean" } }
+    }
+  }
+}

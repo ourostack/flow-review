@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fixture app</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #fff; }
+  @media (prefers-color-scheme: dark) { body { color: #eee; background: #111; } }
+  main { padding: 16px; }
+  section { padding: 8px 0; }
+  .tiny { width: 14px; height: 14px; padding: 0; border: 1px solid; font-size: 10px; }
+  dialog { max-width: 30rem; }
+</style></head>
+<body>
+<main>
+  <h1>Fixture app</h1>
+  <section id="list" aria-labelledby="list-h"><h2 id="list-h">Items</h2><ul id="items"></ul></section>
+  <section id="actions"><button id="open" data-ds>Open details</button> <button class="tiny" data-ds aria-label="x">x</button><button class="tiny" aria-label="y">y</button></section>
+  <dialog id="d" aria-labelledby="d-h"><h2 id="d-h">Details</h2><p>These are the details of the item, in plain words.</p><button id="close" data-ds>Close</button></dialog>
+</main>
+<script>
+  const q = new URLSearchParams(location.search);
+  const list = document.getElementById('items');
+  fetch('data.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))).then((d) => {
+    if (!d.items.length) list.outerHTML = '<p role="status">Nothing here yet. Items you add show up in this list.</p>';
+    else for (const i of d.items) list.insertAdjacentHTML('beforeend', '<li>' + i + '</li>');
+  }).catch((e) => { list.outerHTML = q.has('raw') ? '<p>' + e.stack + '</p>' : '<p role="alert"><span data-moment="error" aria-hidden="true">(art)</span> The items could not load. Try again in a minute.</p>'; });
+  const d = document.getElementById('d');
+  document.getElementById('open').onclick = () => d.showModal();
+  document.getElementById('close').onclick = () => d.close();
+</script>
+</body></html>

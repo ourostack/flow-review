@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/finding-0.schema.json",
+  "title": "flow-review-finding/0",
+  "description": "One line of findings.jsonl.",
+  "type": "object",
+  "required": ["flow", "step", "surface", "cell", "check", "pass", "ms"],
+  "properties": {
+    "flow": { "type": "string" },
+    "step": { "type": "string" },
+    "surface": { "enum": ["web", "cdp", "agent-cli", "agent-http"] },
+    "cell": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["viewport", "theme", "reducedMotion"],
+          "properties": { "viewport": { "type": "string" }, "theme": { "enum": ["light", "dark"] }, "reducedMotion": { "type": "boolean" } }
+        }
+      ]
+    },
+    "check": { "type": "string" },
+    "pass": { "type": "boolean" },
+    "measured": {},
+    "threshold": {},
+    "selector": { "type": "string" },
+    "evidence": { "type": "string" },
+    "fix": { "type": "string" },
+    "ms": { "type": "number" }
+  }
+}

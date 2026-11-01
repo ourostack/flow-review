@@ -1,0 +1,20 @@
+{
+  "schema": "flow-review/0",
+  "name": "Duo fixture: clean",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5298 test/fixtures/duo", "url": "http://127.0.0.1:5298/" },
+  "matrix": { "viewports": ["1024x700"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "id": "open", "goto": "/" },
+    { "id": "type", "act": { "role": "textbox", "name": "Message", "verb": "type", "text": "Hello" } },
+    { "id": "send", "act": { "role": "button", "name": "Send", "verb": "click" } },
+    { "id": "type-again", "act": { "role": "textbox", "name": "Message", "verb": "type", "text": "And again" } },
+    { "id": "send-again", "act": { "role": "button", "name": "Send", "verb": "click" } },
+    { "capture": { "moment": "sent" } },
+    { "id": "note", "act": { "role": "textbox", "name": "Note", "verb": "type", "text": "Below the fold" } }
+  ],
+  "checks": {
+    "only": ["duoOverlap", "duoBytes", "celebrationCap", "quietMode", "duoReducedMotion"],
+    "duo": { "quietSteps": [{ "act": { "role": "button", "name": "Quiet", "verb": "click" } }] }
+  }
+}

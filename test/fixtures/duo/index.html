@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Duo fixture</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #fff; }
+  main { padding: 24px; position: relative; }
+  form { display: flex; gap: 12px; align-items: center; padding: 16px; border: 1px solid #888; max-width: 520px; }
+  input { height: 36px; padding: 0 8px; }
+  button { height: 40px; padding: 0 16px; }
+  #peek { position: absolute; left: 150px; top: 115px; width: 40px; height: 40px; pointer-events: none; }
+  .scene { position: absolute; right: 24px; top: 24px; width: 64px; height: 64px; pointer-events: none; }
+</style></head>
+<body>
+<main>
+  <h1>Messages</h1>
+  <img class="scene" data-duo alt="" width="64" height="64">
+  <form id="f" aria-label="New message"><label>Message <input id="msg"></label><button type="button" id="send">Send</button></form>
+  <img id="peek" data-duo alt="" hidden>
+  <div style="height:900px" aria-hidden="true"></div>
+  <form id="g" aria-label="Note" style="position:relative"><label>Note <input id="note"></label><img class="still" data-duo alt="" data-src="duo.png" width="40" height="40" style="position:absolute;right:-60px;top:0;pointer-events:none"></form>
+  <p id="party" data-celebrate hidden>Sent! The duo cheers.</p>
+  <aside data-duo-quiet><p>A tip from the duo: press Send when you're ready.</p></aside>
+  <button type="button" id="quiet">Quiet</button>
+</main>
+<script>
+  const bad = location.search.includes('bad');
+  const art = [...document.querySelectorAll('[data-duo]')];
+  const quietOn = () => localStorage.getItem('quiet') === '1';
+  const apply = () => {
+    const q = quietOn();
+    for (const a of art) { if (q && !bad) { a.hidden = true; a.removeAttribute('src'); } else if (a.classList.contains('scene') || a.dataset.src) a.src = 'duo.png'; }
+    document.querySelector('aside').hidden = q && !bad;
+  };
+  apply();
+  let sends = 0;
+  note.addEventListener('input', () => {
+    // The bad page mounts art later, beside the note: not in the DOM before the act.
+    if (bad) setTimeout(() => { const i = document.createElement('img'); i.setAttribute('data-duo', ''); i.alt = ''; i.src = 'duo.png'; i.width = 40; i.height = 40; i.style.cssText = 'position:absolute;left:60px;top:0;pointer-events:none'; document.getElementById('g').append(i); }, 50);
+  });
+  msg.addEventListener('input', () => {
+    party.hidden = true;
+    if (bad) { peek.src = 'duo.png'; peek.hidden = false; }
+  });
+  send.addEventListener('click', () => { sends++; if (bad || sends === 1) party.hidden = false; });
+  quiet.addEventListener('click', () => { localStorage.setItem('quiet', '1'); apply(); });
+</script>
+</body></html>

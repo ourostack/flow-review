@@ -1,0 +1,1109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/flow-review-0.schema.json",
+  "title": "flow-review/0",
+  "description": "A flow: what a person or an agent does, across a matrix, and which deterministic checks measure it.",
+  "type": "object",
+  "required": [
+    "surface",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "flow-review/0"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "surface": {
+      "enum": [
+        "web",
+        "cdp",
+        "agent-cli",
+        "agent-http"
+      ]
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "env": {
+          "$ref": "#/definitions/strings"
+        },
+        "url": {
+          "type": "string"
+        },
+        "ready": {
+          "type": "string",
+          "description": "A URL that answers once the app is up (default: url), or \"stdout-json\": up when it prints a JSON object line, whose fields become ${start.<field>}."
+        },
+        "readyTimeoutMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cdpUrl": {
+          "type": "string"
+        },
+        "blockExternal": {
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string",
+          "description": "The default target when neither --target nor FLOW_REVIEW_TARGET is given."
+        },
+        "cli": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "agent-cli: the command each run step's argv follows, such as [\"node\", \"${target}\"]."
+        },
+        "cliNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Command names a stderr line may name as the fix (the namesFix rule)."
+        },
+        "controlUrl": {
+          "type": "string",
+          "description": "A mock's control port, for harness steps."
+        },
+        "stateProbe": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "agent-cli: argv (after app.cli) whose output must not change across a readOnly flow."
+        },
+        "guard": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "argv run once the app is up; it must exit 0 (for example, a check that it is a mock)."
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "base64": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Files written (relative to the working directory) before the app starts."
+        },
+        "help": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "agent-cli: argv (after cli) that prints the top-level help; every command a flow runs successfully must be listed in it (the listed check)."
+        },
+        "scope": {
+          "enum": [
+            "run",
+            "flow"
+          ],
+          "description": "run (default): one app for every flow that starts it the same way; flow: a fresh one for each flow."
+        }
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "viewports": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{2,5}x[0-9]{2,5}$"
+          }
+        },
+        "themes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "light",
+              "dark"
+            ]
+          }
+        },
+        "reducedMotion": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "boolean"
+          }
+        },
+        "themeVia": {
+          "enum": [
+            "emulate",
+            "steps"
+          ]
+        }
+      }
+    },
+    "themeSteps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "light": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/uiStep"
+          }
+        },
+        "dark": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/uiStep"
+          }
+        }
+      }
+    },
+    "fixtures": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "$ref": "#/definitions/routes"
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/uiStep"
+          },
+          {
+            "$ref": "#/definitions/agentStep"
+          }
+        ]
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "only": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/check"
+          }
+        },
+        "skip": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/check"
+          }
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "axeImpact": {
+              "enum": [
+                "minor",
+                "moderate",
+                "serious",
+                "critical"
+              ]
+            },
+            "contrastText": {
+              "type": "number",
+              "minimum": 1
+            },
+            "contrastUi": {
+              "type": "number",
+              "minimum": 1
+            },
+            "targetPx": {
+              "type": "number",
+              "minimum": 0
+            },
+            "deadSpace": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "deadSpaceMinSectionPx": {
+              "type": "number",
+              "minimum": 0
+            },
+            "repetitionMinChars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "repetitionMax": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "clsMax": {
+              "type": "number",
+              "minimum": 0
+            },
+            "longTaskMs": {
+              "type": "number",
+              "minimum": 50
+            },
+            "frameMs": {
+              "type": "number",
+              "minimum": 1
+            },
+            "jankMinFrames": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "slowFrameShare": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "overflowPx": {
+              "type": "number",
+              "minimum": 0
+            },
+            "stateMinChars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "allowTruncation": {
+              "type": "boolean"
+            },
+            "truncationMinShown": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "contrastLarge": {
+              "type": "number",
+              "minimum": 1
+            },
+            "duoBytes": {
+              "type": "number",
+              "minimum": 0
+            },
+            "celebrationMax": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "designSystem": {
+          "type": "object",
+          "required": [
+            "marker"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "marker": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignore": {
+              "type": "string"
+            }
+          }
+        },
+        "proofNotice": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proof": {
+              "type": "string"
+            },
+            "notice": {
+              "type": "string"
+            },
+            "minChars": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "sections": {
+          "type": "string"
+        },
+        "focusGuards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "popupLayers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignore": {
+          "type": "string"
+        },
+        "allowErrors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Regexes for console errors, page errors and failed requests the errors check accepts."
+        },
+        "moments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "marker": {
+              "type": "string",
+              "description": "The Moment a state should hold; {kind} becomes the state's kind. Default [data-moment=\"{kind}\"]."
+            }
+          }
+        },
+        "duo": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The duo: art that helps and never gets in the way.",
+          "properties": {
+            "art": {
+              "type": "string",
+              "description": "Duo art (default [data-duo])."
+            },
+            "quiet": {
+              "type": "string",
+              "description": "What quiet mode must hide besides the art (default [data-duo-quiet])."
+            },
+            "celebrate": {
+              "type": "string",
+              "description": "A celebration (default [data-celebrate])."
+            },
+            "assets": {
+              "type": "string",
+              "description": "A regex for the duo's asset URLs, beside those the art references."
+            },
+            "quietSteps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/uiStep"
+              },
+              "description": "How the flow turns quiet mode on; the quietMode check runs them at the end."
+            },
+            "watchMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How long after an act settles duo art still counts as appearing in the working path (default 300)."
+            }
+          }
+        }
+      }
+    },
+    "rubric": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "id": {
+      "type": "string",
+      "description": "A short id (AX flows: W1, T3); the flow is named `<id> <title>` when it has no name."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "description": "Where the flow comes from (a task, an issue). Recorded only."
+    },
+    "readOnly": {
+      "type": "boolean",
+      "description": "The flow only reads: app.stateProbe's output must be the same before and after it."
+    },
+    "agent": {
+      "type": "string",
+      "description": "The host's name for the agent. Recorded only; set the product's own variable in app.env."
+    },
+    "known": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Known defects of flow-level checks: check -> issue. Reported, not counted by --fail-on."
+    },
+    "vars": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Values for {name} placeholders in steps (saves add to them)."
+    }
+  },
+  "definitions": {
+    "strings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "check": {
+      "enum": [
+        "axe",
+        "keyboard",
+        "focusVisible",
+        "contrast",
+        "targetSize",
+        "overflow",
+        "deadSpace",
+        "repetition",
+        "cls",
+        "jank",
+        "designSystem",
+        "proofNotice",
+        "states",
+        "errors",
+        "exit",
+        "status",
+        "jsonShape",
+        "fields",
+        "stdoutRules",
+        "stderrRules",
+        "maxMs",
+        "step",
+        "text",
+        "maxBytes",
+        "readOnly",
+        "known",
+        "listed",
+        "duoOverlap",
+        "duoReducedMotion",
+        "duoBytes",
+        "celebrationCap",
+        "quietMode"
+      ]
+    },
+    "routeFixture": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            "file": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "json": {},
+            "contentType": {
+              "type": "string"
+            },
+            "abort": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/routeFixture"
+      }
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": [
+            "regex"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "regex": {
+              "type": "string"
+            },
+            "flags": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/definitions/name"
+        },
+        "text": {
+          "type": "string"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "nth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exact": {
+          "type": "boolean"
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/definitions/name"
+        },
+        "text": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "focus": {
+          "$ref": "#/definitions/target"
+        },
+        "count": {
+          "type": "object",
+          "required": [
+            "target"
+          ],
+          "properties": {
+            "target": {
+              "$ref": "#/definitions/target"
+            },
+            "equals": {
+              "type": "integer"
+            },
+            "min": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "stepBase": {
+      "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      },
+      "state": {
+        "enum": [
+          "normal",
+          "empty",
+          "error",
+          "loading",
+          "first-run",
+          "success"
+        ]
+      },
+      "stateRegion": {
+        "$ref": "#/definitions/target"
+      },
+      "expect": {
+        "$ref": "#/definitions/expect"
+      },
+      "route": {
+        "$ref": "#/definitions/routes"
+      }
+    },
+    "uiStep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "state": {
+          "enum": [
+            "normal",
+            "empty",
+            "error",
+            "loading",
+            "first-run",
+            "success"
+          ]
+        },
+        "stateRegion": {
+          "$ref": "#/definitions/target"
+        },
+        "expect": {
+          "$ref": "#/definitions/expect"
+        },
+        "route": {
+          "$ref": "#/definitions/routes"
+        },
+        "goto": {
+          "type": "string"
+        },
+        "act": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            },
+            {
+              "type": "object",
+              "required": [
+                "verb"
+              ],
+              "properties": {
+                "verb": {
+                  "enum": [
+                    "click",
+                    "press",
+                    "type",
+                    "hover",
+                    "focus"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "waitFor": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "visible",
+                    "hidden",
+                    "attached",
+                    "detached"
+                  ]
+                },
+                "ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "capture": {
+          "type": "object",
+          "required": [
+            "moment"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "moment": {
+              "type": "string",
+              "minLength": 1
+            },
+            "region": {
+              "$ref": "#/definitions/target"
+            }
+          }
+        },
+        "tabTraverse": {
+          "anyOf": [
+            {
+              "const": true
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "within": {
+                  "type": "string"
+                },
+                "max": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          ]
+        },
+        "setTheme": {
+          "enum": [
+            "light",
+            "dark"
+          ]
+        },
+        "resize": {
+          "type": "string",
+          "pattern": "^[0-9]{2,5}x[0-9]{2,5}$"
+        },
+        "scroll": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "enum": [
+                "top",
+                "bottom"
+              ]
+            },
+            "target": {
+              "$ref": "#/definitions/target"
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "goto"
+          ]
+        },
+        {
+          "required": [
+            "act"
+          ]
+        },
+        {
+          "required": [
+            "waitFor"
+          ]
+        },
+        {
+          "required": [
+            "capture"
+          ]
+        },
+        {
+          "required": [
+            "tabTraverse"
+          ]
+        },
+        {
+          "required": [
+            "setTheme"
+          ]
+        },
+        {
+          "required": [
+            "resize"
+          ]
+        },
+        {
+          "required": [
+            "scroll"
+          ]
+        }
+      ]
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mustMatch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mustNotMatch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "agentExpect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "jsonShape": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "fields": {
+          "type": "object"
+        },
+        "stdoutRules": {
+          "$ref": "#/definitions/rules"
+        },
+        "stderrRules": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/rules"
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "empty",
+                  "oneLine",
+                  "namesFix",
+                  "noStack"
+                ]
+              }
+            }
+          ]
+        },
+        "maxMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "has": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "not": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "agentStep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "expect": {
+          "$ref": "#/definitions/agentExpect"
+        },
+        "run": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "env": {
+          "$ref": "#/definitions/strings"
+        },
+        "stdin": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "request": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "body": {},
+            "headers": {
+              "$ref": "#/definitions/strings"
+            }
+          }
+        },
+        "save": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "fix": {
+          "type": "string"
+        },
+        "known": {
+          "type": "string"
+        },
+        "during": {
+          "type": "object",
+          "required": [
+            "afterMs",
+            "harness"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "afterMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "harness": {
+              "$ref": "#/definitions/harness"
+            }
+          }
+        },
+        "harness": {
+          "$ref": "#/definitions/harness"
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "run"
+          ]
+        },
+        {
+          "required": [
+            "request"
+          ]
+        },
+        {
+          "required": [
+            "harness"
+          ]
+        }
+      ]
+    },
+    "harness": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "body": {}
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "name"
+      ]
+    },
+    {
+      "required": [
+        "title"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,322 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/flow-review-report-0.schema.json",
+  "title": "flow-review-report/0",
+  "type": "object",
+  "required": [
+    "schema",
+    "tool",
+    "startedAt",
+    "ms",
+    "summary",
+    "table",
+    "units",
+    "attachments",
+    "judges"
+  ],
+  "properties": {
+    "schema": {
+      "const": "flow-review-report/0"
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "startedAt": {
+      "type": "string"
+    },
+    "finishedAt": {
+      "type": "string"
+    },
+    "ms": {
+      "type": "number"
+    },
+    "shard": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "failOn": {
+      "type": "string"
+    },
+    "exitCode": {
+      "type": "integer"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "flows",
+        "units",
+        "findings",
+        "failures",
+        "byCheck"
+      ],
+      "properties": {
+        "flows": {
+          "type": "integer"
+        },
+        "units": {
+          "type": "integer"
+        },
+        "findings": {
+          "type": "integer"
+        },
+        "failures": {
+          "type": "integer"
+        },
+        "byCheck": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/count"
+          }
+        }
+      }
+    },
+    "table": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "flow",
+          "side",
+          "surface",
+          "units",
+          "checks"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "human",
+              "agent"
+            ]
+          },
+          "surface": {
+            "type": "string"
+          },
+          "units": {
+            "type": "integer"
+          },
+          "ms": {
+            "type": "number"
+          },
+          "checks": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/count"
+            }
+          }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "flow",
+          "surface",
+          "cell",
+          "ms"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "flow": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "cell": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/definitions/cell"
+              }
+            ]
+          },
+          "ms": {
+            "type": "number"
+          },
+          "failures": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "moments": {
+      "type": "array",
+      "description": "Every empty, loading, error, first-run and success state met, and whether it holds its Moment.",
+      "items": {
+        "type": "object",
+        "required": [
+          "flow",
+          "step",
+          "cell",
+          "kind",
+          "selector",
+          "hasMoment"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          },
+          "cell": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/definitions/cell"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "empty",
+              "loading",
+              "error",
+              "first-run",
+              "success"
+            ]
+          },
+          "selector": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "how": {
+            "type": "string"
+          },
+          "hasMoment": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "judges": {
+      "type": "array"
+    },
+    "timing": {
+      "type": "object"
+    },
+    "captures": {
+      "type": "array",
+      "description": "Each capture step's picture, for judges.",
+      "items": {
+        "type": "object",
+        "required": [
+          "flow",
+          "step",
+          "crop"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          },
+          "moment": {
+            "type": "string"
+          },
+          "crop": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "count": {
+      "type": "object",
+      "required": [
+        "pass",
+        "fail"
+      ],
+      "properties": {
+        "pass": {
+          "type": "integer"
+        },
+        "fail": {
+          "type": "integer"
+        },
+        "ms": {
+          "type": "number"
+        }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "required": [
+        "viewport",
+        "theme",
+        "reducedMotion"
+      ],
+      "properties": {
+        "viewport": {
+          "type": "string"
+        },
+        "theme": {
+          "enum": [
+            "light",
+            "dark"
+          ]
+        },
+        "reducedMotion": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

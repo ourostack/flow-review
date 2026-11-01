@@ -1,0 +1,36 @@
+{
+  "schema": "flow-review/0",
+  "name": "CSP fixture: bad",
+  "surface": "web",
+  "app": {
+    "start": "node test/fixtures/serve.mjs 5301 test/fixtures/csp",
+    "url": "http://127.0.0.1:5301/"
+  },
+  "matrix": {
+    "viewports": [
+      "800x600"
+    ],
+    "themes": [
+      "light"
+    ],
+    "reducedMotion": [
+      true
+    ]
+  },
+  "steps": [
+    {
+      "id": "open",
+      "goto": "/?bad"
+    },
+    {
+      "capture": {
+        "moment": "loaded"
+      }
+    },
+    {
+      "capture": {
+        "moment": "again"
+      }
+    }
+  ]
+}

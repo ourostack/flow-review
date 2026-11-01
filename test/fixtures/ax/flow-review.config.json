@@ -1,0 +1,56 @@
+{
+  "schema": "flow-review-config/0",
+  "surfaces": {
+    "agent-cli": {
+      "app": {
+        "start": "node test/fixtures/ax/mock.mjs",
+        "ready": "stdout-json",
+        "guard": [
+          "node",
+          "-e",
+          "const u = new URL(process.argv[1]); process.exit(u.hostname === '127.0.0.1' ? 0 : 1)",
+          "${start.agent}"
+        ],
+        "target": "test/fixtures/ax/cli.mjs",
+        "cli": [
+          "node",
+          "${target}"
+        ],
+        "cliNames": [
+          "inbox"
+        ],
+        "env": {
+          "INBOX_URL": "${start.agent}",
+          "INBOX_AGENT": "${flow.agent:-flow-review}",
+          "INBOX_HOME": "${workdir}/cli-home"
+        },
+        "controlUrl": "${start.control}",
+        "stateProbe": [
+          "log",
+          "--json"
+        ],
+        "help": [
+          "--help"
+        ],
+        "files": {
+          "${workdir}/cli-home/banner.png": {
+            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          }
+        }
+      },
+      "vars": {
+        "home": "${workdir}/cli-home"
+      }
+    }
+  },
+  "checkAliases": {
+    "discoverable": "listed",
+    "reads-stay-reads": "readOnly",
+    "json-shape": "jsonShape",
+    "json": "jsonShape",
+    "max-ms": "maxMs",
+    "max-bytes": "maxBytes",
+    "text": "text",
+    "stderr": "stderrRules"
+  }
+}

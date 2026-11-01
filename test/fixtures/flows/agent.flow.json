@@ -1,0 +1,9 @@
+{
+  "schema": "flow-review/0",
+  "name": "Fixture: agent CLI",
+  "surface": "agent-cli",
+  "steps": [
+    { "id": "version", "run": ["node", "--version"], "expect": { "exit": 0, "stdoutRules": { "mustMatch": ["^v\\d+"] }, "maxMs": 20000 } },
+    { "id": "json", "run": ["node", "-e", "console.log(JSON.stringify({ ok: true, n: 2 }))"], "expect": { "jsonShape": { "type": "object", "required": ["ok"] }, "fields": { "ok": true, "n": { "gte": 3 } } } }
+  ]
+}

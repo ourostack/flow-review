@@ -1,0 +1,27 @@
+{
+  "schema": "flow-review/0",
+  "id": "R1",
+  "title": "Candidate: today, then one item",
+  "surface": "agent-cli",
+  "app": { "cli": ["node", "${target}"], "cliNames": ["candidate"], "stateProbe": ["log", "--json"] },
+  "readOnly": true,
+  "rubric": ["predictable", "forgiving"],
+  "steps": [
+    { "id": "version", "run": ["--version"], "expect": { "exit": 0, "text": { "has": ["^candidate \\d+\\.\\d+"] }, "stderrRules": ["empty"], "maxMs": 15000 } },
+    {
+      "id": "today",
+      "run": ["today", "--json"],
+      "expect": {
+        "exit": [0],
+        "jsonShape": ["items[].id", "sync.state"],
+        "fields": { "items[title~^weekly].id": 1, "sync.state": { "oneOf": ["ok", "syncing"] }, "items.length": { "type": "number" } },
+        "stderrRules": ["empty", "noStack"],
+        "maxBytes": 2000
+      },
+      "save": { "first": "items[0].id" }
+    },
+    { "id": "show", "run": ["show", "{first}", "--json"], "expect": { "exit": 0, "fields": { "id": 1, "title": { "re": "^Weekly" } } } },
+    { "id": "refusal", "run": ["oops"], "expect": { "exit": 2, "stderrRules": ["oneLine", "namesFix", "noStack"] } },
+    { "id": "not-built", "run": ["slow"], "expect": { "exit": 0 }, "known": "#999" }
+  ]
+}

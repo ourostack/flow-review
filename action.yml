@@ -1,0 +1,148 @@
+name: flow-review
+description: Run flow-review flows (web, cdp, agent-cli, agent-http) and upload the report; or merge shard reports.
+inputs:
+  command:
+    description: run (default) or merge.
+    default: run
+  flows:
+    description: Space-separated flow globs, relative to working-directory.
+    default: flows/**/*.flow.ts flows/**/*.flow.json
+  shard:
+    description: This job's shard, k/n.
+    default: 1/1
+  fail-on:
+    description: any, none, or a comma list of checks that fail the step.
+    default: any
+  only:
+    description: Comma list of checks to run (default all).
+    default: ''
+  working-directory:
+    description: The product repository's folder the flows and app.start run from.
+    default: .
+  out:
+    description: Report folder, relative to working-directory.
+    default: report
+  workers:
+    description: Matrix cells run side by side in one browser (default half the CPUs, at most 4).
+    default: ''
+  times:
+    description: Recorded unit times for balancing shards (default flows/flow-review-times.json when present).
+    default: ''
+  target:
+    description: What the flows run against, put into every ${target} (a built candidate's path, a CLI binary, a URL or CDP endpoint). Recorded in report.json's provenance.
+    default: ''
+  target-version:
+    description: The target's version or commit, for the provenance (a file's sha256 is recorded anyway).
+    default: ''
+  slack:
+    description: Multiplies every maxMs budget (a slow runner).
+    default: '1'
+  reports:
+    description: For merge, space-separated folders (shell globs allowed) holding shard reports.
+    default: ''
+  artifact-name:
+    description: Name of the uploaded report artifact (default flow-review-<k>-of-<n>, or flow-review-report for merge).
+    default: ''
+  upload:
+    description: Upload the report folder as an artifact.
+    default: 'true'
+  node-version:
+    description: Node.js version (22.18 or newer).
+    default: '22'
+outputs:
+  exit-code:
+    description: flow-review's exit code (0 pass, 1 failing checks under fail-on, 2 usage, 3 shard coverage).
+    value: ${{ steps.run.outputs.exit-code }}
+  failures:
+    description: Failing findings.
+    value: ${{ steps.run.outputs.failures }}
+  findings:
+    description: All findings.
+    value: ${{ steps.run.outputs.findings }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: ${{ inputs.node-version }}
+    - name: Install flow-review
+      id: install
+      shell: bash
+      run: |
+        npm ci --prefix "$GITHUB_ACTION_PATH" --omit=dev --no-audit --no-fund --ignore-scripts --loglevel=error
+        echo "playwright=$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/node_modules/playwright-core/package.json")" >> "$GITHUB_OUTPUT"
+    - name: Restore Chromium
+      if: inputs.command == 'run'
+      id: browsers
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.install.outputs.playwright }}
+    - name: Install Chromium
+      if: inputs.command == 'run' && steps.browsers.outputs.cache-hit != 'true'
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/node_modules/playwright/cli.js" install --only-shell chromium
+    - name: flow-review ${{ inputs.command }}
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CMD: ${{ inputs.command }}
+        FLOWS: ${{ inputs.flows }}
+        SHARD: ${{ inputs.shard }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        ONLY: ${{ inputs.only }}
+        OUT: ${{ inputs.out }}
+        WORKERS: ${{ inputs.workers }}
+        TIMES: ${{ inputs.times }}
+        REPORTS: ${{ inputs.reports }}
+        FLOW_REVIEW_TARGET: ${{ inputs.target }}
+        FLOW_REVIEW_TARGET_VERSION: ${{ inputs.target-version }}
+        SLACK: ${{ inputs.slack }}
+        ARTIFACT: ${{ inputs.artifact-name }}
+      run: |
+        dirs=()
+        if [ "$CMD" = merge ]; then shopt -s nullglob; for g in $REPORTS; do for d in $g; do [ -f "$d/report.json" ] && dirs+=("$d"); done; done; fi
+        set -f
+        flows=($FLOWS)
+        args=()
+        if [ "$CMD" = merge ]; then
+          for g in "${flows[@]}"; do args+=(--flows "$g"); done
+          set +e
+          node "$GITHUB_ACTION_PATH/bin/flow-review.mjs" merge "${dirs[@]}" --out "$OUT" --fail-on "$FAIL_ON" "${args[@]}"
+          code=$?
+          name="${ARTIFACT:-flow-review-report}"
+        else
+          [ -n "$ONLY" ] && args+=(--only "$ONLY")
+          [ -n "$WORKERS" ] && args+=(--workers "$WORKERS")
+          [ -n "$TIMES" ] && args+=(--times "$TIMES")
+          [ -n "$SLACK" ] && args+=(--slack "$SLACK")
+          set +e
+          node "$GITHUB_ACTION_PATH/bin/flow-review.mjs" run "${flows[@]}" --out "$OUT" --shard "$SHARD" --fail-on "$FAIL_ON" "${args[@]}"
+          code=$?
+          name="${ARTIFACT:-flow-review-${SHARD//\//-of-}}"
+        fi
+        set -e
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        echo "artifact=$name" >> "$GITHUB_OUTPUT"
+        if [ -f "$OUT/report.json" ]; then
+          node -e 'const r = require(require("path").resolve(process.argv[1])); console.log(`failures=${r.summary.failures}\nfindings=${r.summary.findings}`)' "$OUT/report.json" >> "$GITHUB_OUTPUT"
+          cat "$OUT/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+    - name: Upload the report
+      if: always() && inputs.upload == 'true'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ steps.run.outputs.artifact }}
+        path: ${{ inputs.working-directory }}/${{ inputs.out }}
+        retention-days: 14
+        if-no-files-found: warn
+    - name: Fail on findings
+      if: steps.run.outputs.exit-code != '0'
+      shell: bash
+      env:
+        FAIL_ON: ${{ inputs.fail-on }}
+        EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+      run: |
+        echo "flow-review exited $EXIT_CODE (fail-on: $FAIL_ON)"
+        exit 1
