@@ -1,0 +1,14 @@
+{
+  "schema": "flow-review/0",
+  "name": "Hang fixture: a step that can't finish",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5302 test/fixtures/hang", "url": "http://127.0.0.1:5302/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "timeouts": { "stepMs": 1500 },
+  "steps": [
+    { "id": "open", "goto": "/" },
+    { "id": "press", "act": { "role": "button", "name": "Never enabled", "verb": "click" } },
+    { "capture": { "moment": "pressed" } }
+  ],
+  "checks": { "only": ["overflow"] }
+}

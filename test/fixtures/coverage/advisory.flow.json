@@ -1,0 +1,6 @@
+{
+  "schema": "flow-review/0",
+  "name": "Coverage fixture: advisory",
+  "surface": "agent-cli",
+  "steps": [{ "id": "version", "run": ["node", "--version"], "expect": { "exit": 0 } }]
+}

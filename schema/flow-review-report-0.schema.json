@@ -168,6 +168,10 @@
           },
           "error": {
             "type": "string"
+          },
+          "timedOut": {
+            "type": "boolean",
+            "description": "The unit ran past timeouts.cellMs and was stopped."
           }
         }
       }
@@ -273,6 +277,63 @@
           "crop": {
             "type": "string"
           }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "description": "merge only: how the shard reports covered the expected units.",
+      "properties": {
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duplicated": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unexpected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timedOut": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "missingReports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Report folders given to merge that hold no report.json (a cancelled shard)."
+        },
+        "mode": {
+          "enum": [
+            "gated",
+            "strict"
+          ]
+        },
+        "failing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Units whose coverage fails the merge (exit 3)."
+        },
+        "advisory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Units of advisory flows that were missing, duplicated or timed out: coverage findings only."
         }
       }
     }

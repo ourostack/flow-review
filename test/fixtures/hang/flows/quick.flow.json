@@ -1,0 +1,12 @@
+{
+  "schema": "flow-review/0",
+  "name": "Hang fixture: quick",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5302 test/fixtures/hang", "url": "http://127.0.0.1:5302/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "id": "open", "goto": "/" },
+    { "capture": { "moment": "first screen" } }
+  ],
+  "checks": { "only": ["overflow"] }
+}

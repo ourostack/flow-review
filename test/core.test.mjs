@@ -107,6 +107,34 @@ test('--fail-on', () => {
   assert.equal(exitCodeFor(f, 'axe'), 1);
   assert.equal(exitCodeFor([{ check: 'step', pass: false }], 'axe'), 1, 'a step that could not run fails any list');
   assert.equal(exitCodeFor([{ check: 'axe', pass: false, known: '#1' }], 'any'), 0, 'known defects never count');
+  assert.equal(exitCodeFor([{ check: 'timeout', pass: false }], 'axe'), 1, 'a cell stopped at its time limit fails any list');
+  assert.equal(exitCodeFor([{ check: 'timeout', pass: false }], 'none'), 0);
+  assert.equal(exitCodeFor([{ check: 'coverage', pass: false }], 'any'), 0, 'coverage findings never count: merge decides');
+  const byFlow = new Map([['site', 'axe'], ['app', 'none']]);
+  assert.equal(exitCodeFor([{ flow: 'app', check: 'axe', pass: false }], 'any', byFlow), 0, "a flow's own failOn wins");
+  assert.equal(exitCodeFor([{ flow: 'site', check: 'cls', pass: false }], 'any', byFlow), 0);
+  assert.equal(exitCodeFor([{ flow: 'site', check: 'axe', pass: false }], 'none', byFlow), 1);
+  assert.equal(exitCodeFor([{ flow: 'other', check: 'cls', pass: false }], 'any', byFlow), 1, 'other flows follow --fail-on');
+});
+
+test('timeouts and failOn: the flow\'s own, over its surface\'s in the config, over the config\'s, over the defaults', async () => {
+  const { policyOf, DEFAULT_TIMEOUTS } = await import('../lib/load.mjs');
+  assert.deepEqual(DEFAULT_TIMEOUTS, { cellMs: 120_000, stepMs: 60_000 });
+  assert.deepEqual(policyOf(web, null), { timeouts: DEFAULT_TIMEOUTS, failOn: undefined });
+  const config = { schema: 'flow-review-config/0', timeouts: { cellMs: 1000, stepMs: 500 }, failOn: 'any', surfaces: { web: { timeouts: { cellMs: 2000 }, failOn: 'none' } } };
+  assert.deepEqual(validate('config', config), []);
+  assert.deepEqual(policyOf(web, config), { timeouts: { cellMs: 2000, stepMs: 500 }, failOn: 'none' });
+  assert.deepEqual(policyOf({ ...web, timeouts: { stepMs: 50 }, failOn: 'axe,overflow' }, config), { timeouts: { cellMs: 2000, stepMs: 50 }, failOn: 'axe,overflow' });
+  assert.deepEqual(policyOf({ ...web, surface: 'cdp' }, config).failOn, 'any');
+  assert.deepEqual(validate('flow', { ...web, timeouts: { cellMs: 1000, stepMs: 100 }, failOn: 'axe,overflow' }), []);
+  assert.match(validate('flow', { ...web, timeouts: { cellMs: 0 } }).join(), /cellMs/);
+  assert.match(validate('flow', { ...web, timeouts: { hours: 1 } }).join(), /hours/);
+  assert.throws(() => policyOf({ ...web, failOn: 'axe,contrst' }, null), /unknown check contrst/);
+  const longWait = { ...web, steps: [{ goto: '/' }, { waitFor: { text: 'Done', ms: 200_000 } }] };
+  assert.equal(policyOf(longWait, null).timeouts.cellMs, 230_000, 'a flow that asks to wait longer gets that wait and 30 s');
+  assert.equal(policyOf({ ...longWait, timeouts: { cellMs: 5000 } }, null).timeouts.cellMs, 5000, 'a cellMs given anywhere stands');
+  assert.equal(policyOf(longWait, { surfaces: { web: { timeouts: { cellMs: 120_000 } } } }).timeouts.cellMs, 120_000);
+  assert.equal(policyOf({ name: 'a', surface: 'agent-cli', steps: [{ run: ['x'], timeoutMs: 150_000 }] }, null).timeouts.cellMs, 180_000);
 });
 
 test('a failing harness call during a step is a step failure, not a crash', async () => {

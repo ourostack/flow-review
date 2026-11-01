@@ -1,0 +1,4 @@
+{
+  "schema": "flow-review-config/0",
+  "surfaces": { "agent-cli": { "failOn": "none" } }
+}

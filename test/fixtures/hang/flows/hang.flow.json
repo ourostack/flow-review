@@ -1,0 +1,14 @@
+{
+  "schema": "flow-review/0",
+  "name": "Hang fixture: waits forever",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5302 test/fixtures/hang", "url": "http://127.0.0.1:5302/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "timeouts": { "cellMs": 3000 },
+  "steps": [
+    { "id": "open", "goto": "/" },
+    { "id": "wait", "waitFor": { "text": "Never shown", "ms": 600000 } },
+    { "capture": { "moment": "never" } }
+  ],
+  "checks": { "only": ["overflow"] }
+}

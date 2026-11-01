@@ -1,0 +1,7 @@
+{
+  "schema": "flow-review/0",
+  "name": "Coverage fixture: gated",
+  "surface": "agent-cli",
+  "failOn": "exit",
+  "steps": [{ "id": "version", "run": ["node", "--version"], "expect": { "exit": 0 } }]
+}
