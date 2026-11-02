@@ -814,7 +814,8 @@
                     "press",
                     "type",
                     "hover",
-                    "focus"
+                    "focus",
+                    "hold"
                   ]
                 },
                 "key": {
@@ -822,6 +823,51 @@
                 },
                 "text": {
                   "type": "string"
+                },
+                "ms": {
+                  "description": "hold: how long the key stays down before the steps in during run (default 0).",
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "during": {
+                  "description": "hold: the steps to take while the key is down (a capture among them runs its checks then). The key goes up after them, whatever they did; the hold's own expect is checked once it is up.",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/uiStep"
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "verb": {
+                    "const": "hold"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "key"
+                ],
+                "properties": {
+                  "key": {
+                    "minLength": 1
+                  }
+                }
+              },
+              "else": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "ms"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "during"
+                      ]
+                    }
+                  ]
                 }
               }
             }

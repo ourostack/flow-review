@@ -54,6 +54,12 @@ interface StepBase {
 export type UiStep = StepBase & (
   | { goto: string }
   | { act: Target & { verb: "click" | "press" | "type" | "hover" | "focus"; key?: string; text?: string } }
+  /**
+   * Holds `key` down (on the target, focused first, when one is given), waits `ms` (default 0), takes the `during`
+   * steps (a capture among them runs its checks while the key is down), then lets it go, whatever those steps did. The
+   * step's own `expect` is checked once the key is up.
+   */
+  | { act: Target & { verb: "hold"; key: string; ms?: number; during?: UiStep[] } }
   | { waitFor: Target & { state?: "visible" | "hidden" | "attached" | "detached"; ms?: number } }
   | { capture: { moment: string; region?: Target } }
   | { tabTraverse: true | { within?: string; max?: number } }

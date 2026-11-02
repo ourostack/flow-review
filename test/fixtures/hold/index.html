@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Hold fixture</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; color: #111; background: #fff; }
+  /* Shown only while the key is held, and too faint to read: a contrast finding at a capture proves it was measured. */
+  #own { color: #c8c8c8; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hold fixture</h1>
+  <p id="look">Showing the try.</p>
+  <p id="own" hidden>Showing your own style.</p>
+</main>
+<script>
+  // Hold \ to see your own style; let go to see the try again.
+  const look = document.getElementById('look');
+  const own = document.getElementById('own');
+  const show = (held) => {
+    document.body.toggleAttribute('data-held', held);
+    look.textContent = held ? 'Comparing with yours.' : 'Showing the try.';
+    own.hidden = !held;
+  };
+  addEventListener('keydown', (e) => { if (e.key === '\\' && !e.repeat) show(true); });
+  addEventListener('keyup', (e) => { if (e.key === '\\') show(false); });
+</script>
+</body></html>

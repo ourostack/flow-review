@@ -1,0 +1,28 @@
+{
+  "schema": "flow-review/0",
+  "name": "Hold fixture",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5304 test/fixtures/hold", "url": "http://127.0.0.1:5304/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "goto": "/" },
+    { "waitFor": { "text": "Showing the try." } },
+    { "capture": { "moment": "before" } },
+    {
+      "id": "hold",
+      "act": {
+        "verb": "hold",
+        "key": "\\",
+        "ms": 100,
+        "during": [
+          { "id": "held-shown", "waitFor": { "text": "Showing your own style." }, "expect": { "text": "Comparing with yours." } },
+          { "capture": { "moment": "held" } }
+        ]
+      },
+      "expect": { "text": "Showing the try." }
+    },
+    { "id": "released", "waitFor": { "text": "Showing your own style.", "state": "hidden" } },
+    { "capture": { "moment": "after" } }
+  ],
+  "checks": { "only": ["errors", "contrast"] }
+}
