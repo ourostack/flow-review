@@ -98,7 +98,7 @@ Every one of these cost a red run before we learned it.
   checks: { thresholds: { allowTruncation: true } },
   ```
 
-- **In an agent flow, a defect you've filed but not fixed** gets `known: "#42"` on the step (or `known: { stderrRules: "#42" }` on the flow, keyed by check name). It's reported, not failed, and when it passes again the `known` check fails so the mark gets removed. Web flows have no `known` mark yet: use a commented threshold or `skip`, as above.
+- **In an agent flow, a defect you've filed but not fixed** gets `known: "#42"` on the step (or `known: { stderrRules: "#42" }` on the flow, keyed by check name). It's reported, not failed. A step's mark that passes again fails the `known` check, so the mark gets removed; a flow-level mark doesn't, so remove it when its issue closes. Web flows have no `known` mark yet: use a commented threshold or `skip`, as above.
 - **A flow for a feature that isn't built yet** goes in a folder your workflow leaves out (`flows/pending/`), and moves up when it can run.
 
 ## Read the report
@@ -125,7 +125,7 @@ Notice: the error state shows "HTTP 500" and a URL, which a person can't act on.
 ## Keep it fast
 
 - **Size the matrix to the question.** Phone to 4K, light and dark, is right for a page; a centred sheet that looks the same wider needs two widths, not five. Every cell costs CI time.
-- **Record times.** After a run, `flow-review times report --out flows/flow-review-times.json`, and commit it. Shards then split by measured time; a new flow's cells with no times count as the median recorded cell, and a slow one will overload its shard.
+- **Record times.** After a run, `npx flow-review times report --out flows/flow-review-times.json`, and commit it. Shards then split by measured time; a new flow's cells with no times count as the median recorded cell, and a slow one will overload its shard.
 - **Set time limits.** A cell that hangs is stopped at `timeouts.cellMs` and reported at the step it was on, so the shard still finishes.
 
 ## Before you open the pull request

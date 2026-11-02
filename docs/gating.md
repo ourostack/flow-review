@@ -22,7 +22,7 @@ Deterministic DOM checks (`axe`, `overflow`, `contrast`, `targetSize`, `keyboard
 
 ### 2. Keep machine-dependent checks advisory
 
-`jank` (long tasks and slow frames) and `cls` measure the runner as much as your code: on shared runners we saw one page's long task vary more than threefold between runs of the same job. Report them. If you want them to gate, gate them on a pinned runner class, or as a ratchet against main's own last run, never against an absolute number on shared runners.
+`jank` (long tasks and slow frames) and `cls` measure the runner as much as your code: on shared runners the same page's long task varies widely between runs of the same job. Report them. If you want them to gate, gate them on a pinned runner class, or as a ratchet against main's own last run, never against an absolute number on shared runners.
 
 ### 3. One job is the gate
 
