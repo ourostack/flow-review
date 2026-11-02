@@ -26,6 +26,7 @@
     "selector": { "type": "string" },
     "evidence": { "type": "string" },
     "fix": { "type": "string" },
+    "advisory": { "type": "boolean", "description": "An advisory finding (unusedRoute): reported, never counted by --fail-on." },
     "ms": { "type": "number" }
   }
 }

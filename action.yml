@@ -132,7 +132,8 @@ runs:
         if [ -f "$OUT/report.json" ]; then
           node -e 'const r = require(require("path").resolve(process.argv[1])); console.log(`failures=${r.summary.failures}\nfindings=${r.summary.findings}`)' "$OUT/report.json" >> "$GITHUB_OUTPUT"
           cat "$OUT/summary.md" >> "$GITHUB_STEP_SUMMARY"
-          # Units a merge found missing or duplicated (gated: errors; advisory: warnings), and cells stopped at their limit.
+          # Units a merge found missing or duplicated (gated: errors; advisory: warnings), advisory findings, and cells stopped
+          # at their limit.
           node -e '
             const r = require(require("path").resolve(process.argv[1]));
             const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
@@ -142,6 +143,7 @@ runs:
             const timedOut = (r.units ?? []).filter((u) => u.timedOut);
             if (failing.length) console.log(`::error title=flow-review coverage::${n(failing.length, "gated unit", "gated units")} did not run exactly once (failing coverage findings; the merge fails): ${list(failing)}`);
             if (advisory.length) console.log(`::warning title=flow-review coverage::${n(advisory.length, "advisory unit", "advisory units")} did not run exactly once to the end (failing coverage findings that do not fail the merge): ${list(advisory)}`);
+            if (r.summary?.advisories) console.log(`::warning title=flow-review advisories::${n(r.summary.advisories, "advisory finding", "advisory findings")} (they never fail the run); see the summary`);
             if (timedOut.length && !r.coverage) console.log(`::warning title=flow-review timeouts::${n(timedOut.length, "unit", "units")} ran past timeouts.cellMs and were stopped (failing timeout findings): ${list(timedOut.map((u) => u.key))}`);
           ' "$OUT/report.json"
         fi

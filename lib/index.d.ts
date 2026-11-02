@@ -4,7 +4,7 @@
 export type CheckName =
   | "axe" | "keyboard" | "focusVisible" | "contrast" | "targetSize" | "overflow" | "deadSpace" | "repetition"
   | "cls" | "jank" | "designSystem" | "proofNotice" | "states" | "errors"
-  | "duoOverlap" | "duoReducedMotion" | "duoBytes" | "celebrationCap" | "quietMode"
+  | "duoOverlap" | "duoReducedMotion" | "duoBytes" | "celebrationCap" | "quietMode" | "unusedRoute"
   | "exit" | "jsonShape" | "fields" | "stdoutRules" | "stderrRules" | "status" | "text" | "maxMs" | "maxBytes" | "readOnly" | "listed" | "known" | "step"
   | "timeout" | "coverage";
 
@@ -47,7 +47,7 @@ interface StepBase {
   /** Where the state shows (default: main, else body). */
   stateRegion?: Target;
   expect?: Expect;
-  /** Routes for this step's navigation, on top of the flow's fixtures. */
+  /** Routes on top of the flow's fixtures: a goto's last until the next goto or the end of the flow; any other step's, for that step only. */
   route?: Record<string, string | RouteFixture>;
 }
 
@@ -261,6 +261,8 @@ export interface Finding {
   evidence?: string;
   fix?: string;
   ms?: number;
+  /** An advisory finding (unusedRoute): reported, never counted by --fail-on. */
+  advisory?: boolean;
 }
 
 /** Options every check takes: the flow's `checks` config shape. */

@@ -616,7 +616,8 @@
         "duoReducedMotion",
         "duoBytes",
         "celebrationCap",
-        "quietMode"
+        "quietMode",
+        "unusedRoute"
       ]
     },
     "routeFixture": {

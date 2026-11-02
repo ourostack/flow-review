@@ -1,6 +1,6 @@
 {
   "name": "@ourostack/flow-review",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Deterministic flow review: run declared user and agent flows across a matrix and measure accessibility, layout, motion and agent-contract checks, with JSON output and cropped evidence.",
   "license": "MIT",
   "repository": {
