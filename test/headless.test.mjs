@@ -15,6 +15,8 @@ const ci = { CI: 'true' };
 test('headless is the default, and a headful request outside CI throws, naming what asked', () => {
   assert.equal(assertHeadless({}, local).headless, true);
   assert.equal(assertHeadless({ headless: true, args: ['--headless=new'] }, local).headless, true);
+  // PWDEBUG=console only logs; it opens no inspector.
+  for (const PWDEBUG of ['console', '0', 'false']) assert.equal(assertHeadless({}, { PWDEBUG }).headless, true, PWDEBUG);
   for (const [options, env, named] of [
     [{ headless: false }, local, /headless: false/],
     [{ devtools: true }, local, /devtools: true/],
