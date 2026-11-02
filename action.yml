@@ -148,7 +148,7 @@ runs:
             if (failing.length) console.log(`::error title=flow-review coverage::${n(failing.length, "gated unit", "gated units")} did not run exactly once (failing coverage findings; the merge fails): ${list(failing)}`);
             if (advisory.length) console.log(`::warning title=flow-review coverage::${n(advisory.length, "advisory unit", "advisory units")} did not run exactly once to the end (failing coverage findings that do not fail the merge): ${list(advisory)}`);
             const d = r.evidence?.dropped;
-            if (d && d.evidence + d.moments) console.log(`::warning title=flow-review evidence cap::the evidence cap dropped ${n(d.evidence, "evidence crop", "evidence crops")} and ${n(d.moments, "key moment", "key moments")} (${Math.round(d.bytes / 1024)} KB); see report.json's evidence, or raise evidence-max`);
+            if (d && d.evidence + d.moments) console.log(`::warning title=flow-review evidence cap::the evidence cap dropped ${n(d.evidence, "evidence crop", "evidence crops")} and ${n(d.moments, "key moment", "key moments")} (${Math.round(d.bytes / 1024)} KB); see the evidence object in report.json, or raise evidence-max`);
             if (r.summary?.advisories) console.log(`::warning title=flow-review advisories::${n(r.summary.advisories, "advisory finding", "advisory findings")} (they never fail the run); see the summary`);
             if (timedOut.length && !r.coverage) console.log(`::warning title=flow-review timeouts::${n(timedOut.length, "unit", "units")} ran past timeouts.cellMs and were stopped (failing timeout findings): ${list(timedOut.map((u) => u.key))}`);
           ' "$OUT/report.json"
