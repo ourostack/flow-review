@@ -34,7 +34,7 @@ test('a held key\'s state is seen and captured while it is down, and the checks 
   }
   assert.ok(report.captures.some((c) => c.step === 'held' && c.moment === 'held'), 'the held moment is captured');
   const faint = at(findings, 'held', 'contrast').filter((f) => !f.pass);
-  assert.ok(faint.some((f) => /your own style/.test(f.label ?? '')), `the held state's faint words were measured: ${JSON.stringify(at(findings, 'held', 'contrast'))}`);
+  assert.ok(faint.some((f) => f.selector === '#own'), `the held state's faint words were measured: ${JSON.stringify(at(findings, 'held', 'contrast'))}`);
   assert.equal(at(findings, 'before', 'contrast').filter((f) => !f.pass).length, 0, 'not held yet');
 });
 
