@@ -73,7 +73,7 @@ test('a hung cell becomes a timeout finding and the shard finishes; a hung step 
   });
 
   await t.test('the summary notes the stopped cells; a timeout fails a run that fails on any check', () => {
-    assert.match(summary, /\*\*Notice:\*\* 2 units ran past their time limit and were stopped/);
+    assert.match(summary, /❌ \*\*2 units\*\* ran past their time limit and were stopped \(failing `timeout` findings\)/);
     assert.match(summary, /Hang fixture: waits forever · 800x600 light reduced-motion: stopped after 3\.\d s, at step "wait"/);
   });
 
@@ -87,7 +87,7 @@ test('a hung cell becomes a timeout finding and the shard finishes; a hung step 
     const cov = merged.findings.filter((f) => f.check === 'coverage');
     assert.equal(cov.length, 2);
     assert.match(cov.find((f) => f.unit === unit('hang').key).measured, /^timed out after 3\.\d s at step wait$/);
-    assert.match(merged.summary, /\*\*Notice:\*\* 2 advisory units didn't run exactly once to the end/);
+    assert.match(merged.summary, /❌ \*\*2 advisory units\*\* didn't run exactly once to the end: failing `coverage` findings/);
     // Gated, a timed-out cell fails the merge through its timeout finding.
     const gated = cli('merge', out, '--out', path.join(scratch, 'hang-gated'), '--flows', HANG, '--fail-on', 'overflow');
     assert.equal(gated.status, 1, gated.stderr);
@@ -128,9 +128,11 @@ test('merge gates coverage per flow: missing advisory cells are findings, missin
     assert.deepEqual(m.report.coverage.advisory, [advisory]);
     assert.deepEqual(m.report.coverage.failing, []);
     const [f] = m.findings.filter((x) => x.check === 'coverage');
-    assert.deepEqual([f.flow, f.unit, f.pass, f.measured, f.cell, f.surface], ['Coverage fixture: advisory', advisory, false, 'did not run: no shard report has it', null, 'agent-cli']);
+    assert.deepEqual([f.flow, f.unit, f.pass, f.gated, f.measured, f.cell, f.surface], ['Coverage fixture: advisory', advisory, false, false, 'did not run: no shard report has it', null, 'agent-cli']);
     assert.deepEqual(validate('finding', f), []);
-    assert.match(m.summary, /\*\*Notice:\*\* 1 advisory unit didn't run exactly once to the end/);
+    assert.match(m.summary, /❌ \*\*1 advisory unit\*\* didn't run exactly once to the end: failing `coverage` findings, red in the table below, which don't fail the merge/);
+    assert.ok(m.summary.includes('| Coverage fixture: advisory | agent | 0 | 0.0 | ❌ coverage 1 |'), 'a red row, not a blank, though none of its units ran');
+    assert.equal(m.report.summary.failures, 1);
     assert.ok(m.summary.includes(`- \`${advisory}\`: did not run: no shard report has it`));
     assert.match(m.stderr, /advisory \(a coverage finding\): .*advisory\.flow\.json#agent/);
   });
@@ -142,6 +144,10 @@ test('merge gates coverage per flow: missing advisory cells are findings, missin
     assert.equal(m.report.exitCode, 3);
     assert.match(m.summary, /❌ Shards did not cover every gated unit exactly once: 1 unit \(missing 1, duplicated 0, unexpected 0\)/);
     assert.match(m.stderr, /fails the merge: .*gated\.flow\.json#agent/);
+    const f = m.findings.find((x) => x.check === 'coverage');
+    assert.deepEqual([f.flow, f.unit, f.pass, f.gated], ['Coverage fixture: gated', gated, false, true], 'a gated missing cell is a failing finding too');
+    assert.ok(m.summary.includes(`- \`${gated}\`: did not run: no shard report has it`));
+    assert.ok(m.summary.includes('| Coverage fixture: gated | agent | 0 | 0.0 | ❌ coverage 1 |'));
   });
 
   await t.test('a shard that wrote no report (cancelled) is its cells missing, not a crash', () => {
@@ -156,10 +162,14 @@ test('merge gates coverage per flow: missing advisory cells are findings, missin
     assert.match(m.summary, /Shard folders without a report/);
     const gatedGone = merge('cancelled-gated', dir('s1'), cancelled);
     assert.equal(gatedGone.status, 3, 'the gated cell is missing');
+    const cancelledCell = gatedGone.findings.find((x) => x.check === 'coverage');
+    assert.deepEqual([cancelledCell.unit, cancelledCell.pass, cancelledCell.gated, cancelledCell.measured], [gated, false, true, 'did not run: its shard was cancelled or failed and wrote no report']);
     // Every shard cancelled: still a report, with every cell missing.
     const none = merge('none', cancelled);
     assert.equal(none.status, 3);
     assert.deepEqual(none.report.coverage.missing, [advisory, gated]);
+    assert.deepEqual(none.findings.filter((x) => x.check === 'coverage' && !x.pass).map((x) => [x.unit, x.gated]), [[advisory, false], [gated, true]], 'every cell of the cancelled shards is a failure, none a blank');
+    assert.deepEqual(none.report.table.map((r) => [r.flow, r.units, r.checks.coverage]), [['Coverage fixture: advisory', 0, { pass: 0, fail: 1 }], ['Coverage fixture: gated', 0, { pass: 0, fail: 1 }]]);
     assert.deepEqual(validate('report', none.report), []);
   });
 
@@ -171,6 +181,7 @@ test('merge gates coverage per flow: missing advisory cells are findings, missin
     const strict = merge('strict', dir('s2'), '--coverage', 'strict');
     assert.equal(strict.status, 3);
     assert.deepEqual(strict.report.coverage.failing, [advisory]);
+    assert.equal(strict.findings.find((x) => x.check === 'coverage').gated, true);
     assert.equal(cli('merge', dir('s1'), '--coverage', 'loose').status, 2);
   });
 

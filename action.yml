@@ -132,14 +132,17 @@ runs:
         if [ -f "$OUT/report.json" ]; then
           node -e 'const r = require(require("path").resolve(process.argv[1])); console.log(`failures=${r.summary.failures}\nfindings=${r.summary.findings}`)' "$OUT/report.json" >> "$GITHUB_OUTPUT"
           cat "$OUT/summary.md" >> "$GITHUB_STEP_SUMMARY"
-          # Cells stopped at their time limit, and advisory units a merge found missing: notices, not failures.
+          # Units a merge found missing or duplicated (gated: errors; advisory: warnings), and cells stopped at their limit.
           node -e '
             const r = require(require("path").resolve(process.argv[1]));
             const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+            const list = (keys) => `${keys.slice(0, 10).join(", ")}${keys.length > 10 ? ", ..." : ""}`;
+            const failing = r.coverage?.failing ?? [];
             const advisory = r.coverage?.advisory ?? [];
             const timedOut = (r.units ?? []).filter((u) => u.timedOut);
-            if (advisory.length) console.log(`::notice title=flow-review coverage::${n(advisory.length, "advisory unit", "advisory units")} did not run exactly once to the end (coverage findings, which do not fail the merge): ${advisory.slice(0, 10).join(", ")}${advisory.length > 10 ? ", ..." : ""}`);
-            else if (timedOut.length && !r.coverage) console.log(`::notice title=flow-review timeouts::${n(timedOut.length, "unit", "units")} ran past timeouts.cellMs and were stopped: ${timedOut.slice(0, 10).map((u) => u.key).join(", ")}`);
+            if (failing.length) console.log(`::error title=flow-review coverage::${n(failing.length, "gated unit", "gated units")} did not run exactly once (failing coverage findings; the merge fails): ${list(failing)}`);
+            if (advisory.length) console.log(`::warning title=flow-review coverage::${n(advisory.length, "advisory unit", "advisory units")} did not run exactly once to the end (failing coverage findings that do not fail the merge): ${list(advisory)}`);
+            if (timedOut.length && !r.coverage) console.log(`::warning title=flow-review timeouts::${n(timedOut.length, "unit", "units")} ran past timeouts.cellMs and were stopped (failing timeout findings): ${list(timedOut.map((u) => u.key))}`);
           ' "$OUT/report.json"
         fi
     - name: Upload the report

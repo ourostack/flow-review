@@ -78,7 +78,7 @@ jobs:
           fail-on: none
 
   # The merge as it runs when a shard was cancelled: shard 2's folder holds no report. The fixture flows fail on
-  # nothing here, so their missing cells are coverage findings under a notice, and the merge passes.
+  # nothing here, so their missing cells are failing coverage findings, and the merge still passes.
   merge-cancelled-shard:
     needs: action
     runs-on: ubuntu-latest
@@ -105,4 +105,4 @@ jobs:
         run: |
           test "$EXIT_CODE" = 0
           grep -q '"check":"coverage"' report/findings.jsonl
-          node -e 'const c = require("./report/report.json").coverage; if (!c.advisory.length || c.failing.length || c.missingReports.length !== 1) process.exit(1)'
+          node -e 'const c = require("./report/report.json").coverage; const f = require("fs").readFileSync("report/findings.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((x) => x.check === "coverage"); if (!c.advisory.length || c.failing.length || c.missingReports.length !== 1 || f.length !== c.advisory.length || f.some((x) => x.pass)) process.exit(1)'
