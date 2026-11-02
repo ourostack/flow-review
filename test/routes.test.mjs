@@ -14,6 +14,7 @@ const out = path.join(root, '.scratch', 'routes');
 test('a goto\'s routes outlive its step, another step\'s end with it, and unused routes are advisory', { timeout: 120_000 }, () => {
   fs.rmSync(out, { recursive: true, force: true });
   const r = spawnSync(process.execPath, ['bin/flow-review.mjs', 'run', 'test/fixtures/routes/flows/*.flow.json', '--out', out, '--fail-on', 'any'], { cwd: root, encoding: 'utf8', env: { ...process.env, FLOW_REVIEW_WORKERS: '1' } });
+  assert.ok(fs.existsSync(path.join(out, 'findings.jsonl')), r.stderr);
   const findings = fs.readFileSync(path.join(out, 'findings.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const of = (flow) => findings.filter((f) => f.flow === `Routes fixture: ${flow}`);
   const steps = (flow) => Object.fromEntries(of(flow).filter((f) => f.check === 'step').map((f) => [f.step, f.pass ? 'pass' : f.measured]));

@@ -1,6 +1,7 @@
 {
   "schema": "flow-review/0",
   "name": "Routes fixture: a goto's route answers after the load",
+  "surface": "web",
   "app": { "start": "node test/fixtures/serve.mjs 5305 test/fixtures/routes", "url": "http://127.0.0.1:5305/" },
   "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
   "steps": [
