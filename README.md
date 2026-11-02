@@ -9,7 +9,7 @@ It runs locally and in CI, and every check is also a plain function another repo
 Node 22.18 or newer. From the product repository:
 
 ```sh
-npm install --save-dev github:ourostack/flow-review#v0.3.1 && npx playwright install --only-shell chromium
+npm install --save-dev github:ourostack/flow-review#v0.3.2 && npx playwright install --only-shell chromium
 npx flow-review run                  # flows/**/*.flow.{ts,json}
 npx flow-review run 'flows/site/*.flow.ts' --only axe,contrast --fail-on none
 ```
@@ -159,7 +159,7 @@ Checks run at every `capture` and at the end of the flow. Keyboard and focus run
 | `known` | a step marked `known` passes now: remove the mark | — |
 | `step` | a step can't be done (its target isn't there, or it ran past `timeouts.stepMs`). It fails whatever checks `--fail-on` names | `timeouts.stepMs` (60000) |
 | `timeout` | a cell ran past its time limit and was stopped. Like `step`, it fails whatever checks `--fail-on` names | `timeouts.cellMs` (120000) |
-| `coverage` | merge only: a unit of an advisory flow didn't run, ran twice or timed out. Never fails a run or merge by itself | — |
+| `coverage` | merge only: a unit didn't run (its shard was cancelled or wrote no report), ran twice, or, in an advisory flow, timed out. A gated unit's fails the merge (exit 3); an advisory one's doesn't | — |
 
 `checks.only` and `checks.skip` choose checks per flow; `checks.ignore` is a selector every check leaves out.
 
@@ -200,7 +200,7 @@ jobs:
     strategy: { fail-fast: false, matrix: { shard: [1/4, 2/4, 3/4, 4/4] } }
     steps:
       - uses: actions/checkout@v4
-      - uses: ourostack/flow-review@v0.3.1
+      - uses: ourostack/flow-review@v0.3.2
         with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", fail-on: none }
   merge:
     needs: review
@@ -209,7 +209,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "flow-review-*-of-*", path: shards }
-      - uses: ourostack/flow-review@v0.3.1
+      - uses: ourostack/flow-review@v0.3.2
         with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", fail-on: none }
 ```
 
@@ -219,15 +219,15 @@ Shards split matrix cells. With `flows/flow-review-times.json` (from `flow-revie
 
 ### Coverage, cancelled shards and advisory flows
 
-`merge` checks that every unit of `--flows` ran exactly once. What a gap means depends on whether the unit's flow gates:
+`merge` checks that every unit of `--flows` ran exactly once. A unit that didn't is never a blank: every unit that is missing or ran twice becomes a failing `coverage` finding (`{ check: "coverage", pass: false, unit, gated, measured }`), counted in its flow's row (marked ❌, a row of its own when none of the flow's units ran) and in the summary's failures. A timed-out unit already has its failing `timeout` finding. Whether a gap fails the merge depends on whether the unit's flow gates:
 
-- A flow **gates** when it fails on something: its own `failOn`, else its config's, else `--fail-on`, is anything but `none`. A gated unit that is missing or ran twice fails the merge (exit 3), listed in the summary. A gated unit that timed out fails through its `timeout` finding (exit 1).
-- A flow failing on `none` is **advisory**. Its units that are missing, ran twice or timed out become `coverage` findings (`{ check: "coverage", unit, measured }`), listed under a **Notice:** in the summary and as a notice annotation in CI. They don't fail the merge.
-- A shard that was cancelled, or failed before writing its report, leaves a folder without `report.json`, or none at all. `merge` reads such a folder as a shard whose units are missing, and names it in the summary (`coverage.missingReports` in `report.json`).
+- A flow **gates** when it fails on something: its own `failOn`, else its config's, else `--fail-on`, is anything but `none`. A gated unit that is missing or ran twice fails the merge (exit 3), listed in the summary and as an error annotation in CI. A gated unit that timed out fails through its `timeout` finding (exit 1).
+- A flow failing on `none` is **advisory**. Its units that are missing, ran twice or timed out are failing `coverage` findings too, listed in the summary and as a warning annotation in CI, but they don't fail the merge.
+- A shard that was cancelled, or failed before writing its report, leaves a folder without `report.json`, or none at all. `merge` reads such a folder as a shard whose units are missing, so each of them is a failing `coverage` finding ("its shard was cancelled or failed and wrote no report"), and names the folder in the summary (`coverage.missingReports` in `report.json`).
 - A unit no flow expects (`--flows` and the shards disagree) always fails.
 - `--coverage strict` (the action's `coverage: strict`) goes back to failing on every missing or duplicated unit, gated or not.
 
-So a run that gates some checks on one set of flows and only reports on others can merge everything with `--fail-on none`: a hung or cancelled advisory shard shows up as findings, not a red merge, while a merge of the gated flows with their `--fail-on` still fails on any gap.
+So a run that gates some checks on one set of flows and only reports on others can merge everything with `--fail-on none`: a hung or cancelled advisory shard shows up as red findings, not a red merge, while a merge of the gated flows with their `--fail-on` still fails on any gap.
 
 ## Use the checks as conformance tests
 
@@ -245,7 +245,7 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.1`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.2`).
 
 ## Develop
 
