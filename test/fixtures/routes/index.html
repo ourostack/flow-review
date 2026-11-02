@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Routes fixture</title></head>
+<body>
+<main>
+  <h1>Routes fixture</h1>
+  <p>Asks for one answer 300 ms after it loads, and for another each time the button is pressed.</p>
+  <p id="late">Waiting for the late answer</p>
+  <button id="fetch">Fetch now</button>
+  <p id="now">Nothing fetched yet</p>
+</main>
+<script>
+  const show = (id, url) => fetch(url).then((r) => r.json()).then((d) => { document.getElementById(id).textContent = d.text; }, () => { document.getElementById(id).textContent = 'The request failed'; });
+  addEventListener('load', () => setTimeout(() => show('late', '/api/late.json'), 300));
+  document.getElementById('fetch').addEventListener('click', () => show('now', '/api/now.json'));
+</script>
+</body></html>

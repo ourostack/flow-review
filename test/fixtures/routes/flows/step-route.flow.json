@@ -1,0 +1,12 @@
+{
+  "schema": "flow-review/0",
+  "name": "Routes fixture: another step's route lasts that step",
+  "app": { "start": "node test/fixtures/serve.mjs 5305 test/fixtures/routes", "url": "http://127.0.0.1:5305/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "id": "open", "goto": "/" },
+    { "id": "routed", "act": { "role": "button", "name": "Fetch now", "verb": "click" }, "route": { "**/api/now.json": { "json": { "text": "Routed now answer" } } }, "expect": { "text": "Routed now answer" } },
+    { "id": "unrouted", "act": { "role": "button", "name": "Fetch now", "verb": "click" }, "expect": { "text": "Server now answer" } }
+  ],
+  "checks": { "only": ["unusedRoute"] }
+}
