@@ -22,11 +22,11 @@ Deterministic DOM checks (`axe`, `overflow`, `contrast`, `targetSize`, `keyboard
 
 ### 2. Keep machine-dependent checks advisory
 
-`jank` (long tasks and slow frames), `cls` and motion checks measure the runner as much as your code: the same page's long task measured 200–733 ms across runs of one CI job. Report them. If you want them to gate, gate them on a pinned runner class, or as a ratchet against main's own last run, never against an absolute number on shared runners.
+`jank` (long tasks and slow frames) and `cls` measure the runner as much as your code: on shared runners we saw one page's long task vary more than threefold between runs of the same job. Report them. If you want them to gate, gate them on a pinned runner class, or as a ratchet against main's own last run, never against an absolute number on shared runners.
 
 ### 3. One job is the gate
 
-Run shards advisory, then merge them twice: once for the report (`fail-on: none`), once for the gate with the gated checks. The gate's merge also fails when a gated cell is missing, so a cancelled shard can't turn into a silent pass.
+Run the shards with the gated checks, then merge them in one job, the gate, with the same `fail-on`. Its report still lists every finding, advisory ones included, and its merge also fails when a gated cell is missing, so a cancelled shard can't turn into a silent pass.
 
 ```yaml
 env:
@@ -84,4 +84,4 @@ A time-budget check is the one exception worth making in the wrapper: if a "budg
 
 ## Where outside actions aren't allowed
 
-Some organizations only run actions from their own repositories. A run that fails at startup before any step is the sign. Copy this repository at a release tag into yours as a local action (`.github/actions/flow-review/`), record the tag and commit beside it, and use `uses: ./.github/actions/flow-review`. Update it by copying the next tag, never by editing the copy.
+Some organizations only run actions from their own repositories. A run that fails at startup before any step is the sign. Copy this repository at a release tag into yours as a local action (`.github/actions/flow-review/`), record the tag and commit beside it, and use `uses: ./.github/actions/flow-review`. Update it by copying the next tag, never by editing the copy. The copy still uses GitHub's own `actions/*` (setup-node, cache, upload-artifact), so those must be allowed.
