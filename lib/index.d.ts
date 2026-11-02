@@ -208,6 +208,8 @@ export interface Flow {
     cdpUrl?: string;
     /** Abort requests to other origins (default true). */
     blockExternal?: boolean;
+    /** What a goto waits for after navigating: "load" (default), "domcontentloaded", "networkidle" (opt-in, up to 3 s) or a target. */
+    readyAfterGoto?: "load" | "domcontentloaded" | "networkidle" | { role?: string; name?: string | { regex: string; flags?: string }; text?: string; selector?: string; exact?: boolean; ms?: number };
   };
   matrix?: {
     viewports?: string[];

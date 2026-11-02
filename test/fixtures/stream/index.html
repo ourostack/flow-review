@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Stream fixture</title></head>
+<body>
+<main>
+  <h1>Stream fixture</h1>
+  <p id="said">Waiting for the stream.</p>
+</main>
+<script>
+  // Live updates over an event stream that stays open: the network never goes idle.
+  const events = new EventSource('/events');
+  events.onmessage = (e) => { document.getElementById('said').textContent = `Streamed: ${e.data}`; };
+  // And one read through fetch, as a client that wants headers or a cursor does.
+  fetch('/events?via=fetch').then((r) => r.body.getReader().read()).catch(() => {});
+</script>
+</body></html>
