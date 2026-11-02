@@ -17,6 +17,8 @@ test('headless is the default, and a headful request outside CI throws, naming w
   assert.equal(assertHeadless({ headless: true, args: ['--headless=new'] }, local).headless, true);
   // PWDEBUG=console only logs; it opens no inspector.
   for (const PWDEBUG of ['console', '0', 'false']) assert.equal(assertHeadless({}, { PWDEBUG }).headless, true, PWDEBUG);
+  assert.equal(assertHeadless({ ignoreDefaultArgs: ['--mute-audio'] }, local).headless, true);
+  assert.equal(assertHeadless({ ignoreDefaultArgs: true, args: ['--headless=new'] }, local).headless, true);
   for (const [options, env, named] of [
     [{ headless: false }, local, /headless: false/],
     [{ devtools: true }, local, /devtools: true/],
@@ -24,6 +26,10 @@ test('headless is the default, and a headful request outside CI throws, naming w
     [{ args: ['--auto-open-devtools-for-tabs'] }, local, /argument --auto-open-devtools-for-tabs/],
     [{ args: ['--headless=false'] }, local, /argument --headless=false/],
     [{}, { PWDEBUG: '1' }, /PWDEBUG=1/],
+    [{}, { npm_config_pwdebug: 'true' }, /npm_config_pwdebug=true/],
+    [{}, { npm_package_config_pwdebug: '1' }, /npm_package_config_pwdebug=1/],
+    [{ ignoreDefaultArgs: true }, local, /ignoreDefaultArgs: true/],
+    [{ ignoreDefaultArgs: ['--headless'] }, local, /ignoreDefaultArgs/],
     [{ headless: false }, { CI: '1' }, /headless: false/],
   ]) assert.throws(() => assertHeadless(options, env), (e) => /refusing to launch a visible browser outside CI/.test(e.message) && named.test(e.message), JSON.stringify([options, env]));
 });
