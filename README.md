@@ -28,6 +28,8 @@ In CI, use the action instead ([In CI](#in-ci)): it installs everything itself.
 
 `FLOW_REVIEW_CHROMIUM` points at another Chromium build; `FLOW_REVIEW_CHANNEL=chrome` uses installed Chrome.
 
+**No visible browser outside CI.** Every browser flow-review launches is headless, so a run never shows a window, shows a Dock or taskbar icon, or takes focus on the machine someone is working on. A request for a visible browser (`--headed`, or `PWDEBUG`, which makes Playwright launch headful) is allowed only where `CI=true`. Anywhere else the run is refused before anything starts: exit 2, with an error naming the setting. flow-review never falls back to a visible window. A `cdp` flow connects to a browser that is already running and launches none; whatever `app.start` runs is the app's own command. Your own tests can hold the same rule with `launchBrowser(chromium, options)`, which launches headless by default and throws on `headless: false`, `devtools`, `--headed` or `PWDEBUG` outside CI, or with `assertHeadless(options)`, which only checks the options.
+
 ## A flow
 
 New to flows? [How to write a flow](docs/writing-a-flow.md) walks through a first flow and the mistakes that make runs flaky.
@@ -259,7 +261,7 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.4`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.4`).
 
 ## Develop
 
