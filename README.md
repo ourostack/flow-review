@@ -30,6 +30,8 @@ In CI, use the action instead ([In CI](#in-ci)): it installs everything itself.
 
 ## A flow
 
+New to flows? [How to write a flow](docs/writing-a-flow.md) walks through a first flow and the mistakes that make runs flaky.
+
 `flows/site/read-plan.flow.ts`:
 
 ```ts
@@ -191,6 +193,8 @@ Each one also records whether it holds its Moment: `[data-moment="<kind>"]`, or 
 - `summary.md`: the markdown table CI shows.
 
 ## In CI
+
+To let some checks block merges and keep the rest advisory, including without admin rights on the repository, see [Gating merges](docs/gating.md).
 
 The action (`action.yml`, `uses: ourostack/flow-review@<tag or commit>`) installs flow-review and Chromium (cached by Playwright version), runs, uploads `report/` as an artifact, writes the summary to the job, and fails per `fail-on`. Pin it to a release tag, or to the tag's commit:
 
