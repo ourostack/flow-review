@@ -42,6 +42,14 @@ test('run, shard, merge and judge', { timeout: 240_000 }, async (t) => {
     }
     assert.ok(findings.filter((f) => !f.pass && f.evidence).length >= 8, 'failures carry crops');
     assert.equal(report.captures.length, 8, 'two captures in four cells');
+    // Pictures: failing findings' crops and judged moments only, every one on disk, and nothing else in the folders.
+    assert.deepEqual(report.evidence.dropped, { evidence: 0, moments: 0, bytes: 0 }, 'the default cap drops nothing here');
+    const named = new Set([...findings.map((f) => f.evidence), ...report.captures.map((c) => c.crop)].filter(Boolean));
+    assert.ok(findings.every((f) => f.pass ? !f.evidence : true), 'no passing finding carries a crop');
+    for (const rel of named) assert.ok(fs.existsSync(path.join(full, rel)), rel);
+    const onDisk = ['evidence', 'moments'].flatMap((d) => fs.existsSync(path.join(full, d)) ? fs.readdirSync(path.join(full, d)).map((n) => `${d}/${n}`) : []);
+    assert.deepEqual(onDisk.sort(), [...named].sort());
+    assert.equal(report.evidence.files, named.size);
     const packet = JSON.parse(fs.readFileSync(path.join(full, 'judge-packet-craft.json'), 'utf8'));
     assert.equal(packet.rubric, 'craft');
     assert.ok(packet.moments.length > 0 && packet.failing.length > 0);

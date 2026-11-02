@@ -37,6 +37,9 @@ inputs:
   slack:
     description: Multiplies every maxMs budget (a slow runner).
     default: '1'
+  evidence-max:
+    description: The most bytes of pictures one run (shard) keeps, failing findings' crops first, then the key moments judge packets name; what it drops is recorded in report.json's evidence. Bytes, a number with KB or MB, or none. Default 1MB.
+    default: ''
   reports:
     description: For merge, space-separated folders (shell globs allowed) holding shard reports. A folder without report.json (a cancelled shard) leaves its units missing.
     default: ''
@@ -103,6 +106,7 @@ runs:
         FLOW_REVIEW_TARGET: ${{ inputs.target }}
         FLOW_REVIEW_TARGET_VERSION: ${{ inputs.target-version }}
         SLACK: ${{ inputs.slack }}
+        FLOW_REVIEW_EVIDENCE_MAX: ${{ inputs.evidence-max }}
         ARTIFACT: ${{ inputs.artifact-name }}
       run: |
         dirs=()
@@ -143,6 +147,8 @@ runs:
             const timedOut = (r.units ?? []).filter((u) => u.timedOut);
             if (failing.length) console.log(`::error title=flow-review coverage::${n(failing.length, "gated unit", "gated units")} did not run exactly once (failing coverage findings; the merge fails): ${list(failing)}`);
             if (advisory.length) console.log(`::warning title=flow-review coverage::${n(advisory.length, "advisory unit", "advisory units")} did not run exactly once to the end (failing coverage findings that do not fail the merge): ${list(advisory)}`);
+            const d = r.evidence?.dropped;
+            if (d && d.evidence + d.moments) console.log(`::warning title=flow-review evidence cap::the evidence cap dropped ${n(d.evidence, "evidence crop", "evidence crops")} and ${n(d.moments, "key moment", "key moments")} (${Math.round(d.bytes / 1024)} KB); see the evidence object in report.json, or raise evidence-max`);
             if (r.summary?.advisories) console.log(`::warning title=flow-review advisories::${n(r.summary.advisories, "advisory finding", "advisory findings")} (they never fail the run); see the summary`);
             if (timedOut.length && !r.coverage) console.log(`::warning title=flow-review timeouts::${n(timedOut.length, "unit", "units")} ran past timeouts.cellMs and were stopped (failing timeout findings): ${list(timedOut.map((u) => u.key))}`);
           ' "$OUT/report.json"

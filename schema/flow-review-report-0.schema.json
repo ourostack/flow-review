@@ -258,15 +258,30 @@
     "timing": {
       "type": "object"
     },
+    "evidence": {
+      "type": "object",
+      "description": "The pictures the run kept: failing findings' crops, then the key moments judge packets name, up to maxBytes (null: no cap). dropped counts what the cap left out; unjudgedMoments, the captures no packet named, which keep no picture.",
+      "required": ["maxBytes", "bytes", "files", "dropped", "unjudgedMoments"],
+      "properties": {
+        "maxBytes": { "type": ["integer", "null"] },
+        "bytes": { "type": "integer" },
+        "files": { "type": "integer" },
+        "dropped": {
+          "type": "object",
+          "required": ["evidence", "moments", "bytes"],
+          "properties": { "evidence": { "type": "integer" }, "moments": { "type": "integer" }, "bytes": { "type": "integer" } }
+        },
+        "unjudgedMoments": { "type": "integer" }
+      }
+    },
     "captures": {
       "type": "array",
-      "description": "Each capture step's picture, for judges.",
+      "description": "Each capture step, with its picture (crop) when a judge packet names it and it fit under the evidence cap.",
       "items": {
         "type": "object",
         "required": [
           "flow",
-          "step",
-          "crop"
+          "step"
         ],
         "properties": {
           "flow": {
