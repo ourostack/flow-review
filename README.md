@@ -9,7 +9,7 @@ It runs locally and in CI, and every check is also a plain function another repo
 Node 22.18 or newer. From the product repository:
 
 ```sh
-npm install --save-dev github:ourostack/flow-review#v0.3.4 && npx playwright install --only-shell chromium
+npm install --save-dev github:ourostack/flow-review#v0.3.5 && npx playwright install --only-shell chromium
 npx flow-review run                  # flows/**/*.flow.{ts,json}
 npx flow-review run 'flows/site/*.flow.ts' --only axe,contrast --fail-on none
 ```
@@ -26,7 +26,7 @@ In CI, use the action instead ([In CI](#in-ci)): it installs everything itself.
 | `schema flow\|report\|finding\|rubric` | Prints a published JSON Schema. |
 | `validate [globs]` | Loads and checks flow files. |
 
-`FLOW_REVIEW_CHROMIUM` points at another Chromium build; `FLOW_REVIEW_CHANNEL=chrome` uses installed Chrome.
+`FLOW_REVIEW_CHROMIUM` points at another Chromium build; `FLOW_REVIEW_CHANNEL=chrome` uses installed Chrome. `--evidence-max` caps the bytes of pictures a run keeps ([Output](#output)).
 
 **No visible browser outside CI.** Every browser flow-review launches is headless, so a run never shows a window, shows a Dock or taskbar icon, or takes focus on the machine someone is working on. A request for a visible browser (`--headed`, or `PWDEBUG` set for Playwright's inspector, which launches every browser headful) is allowed only where `CI=true`. Anywhere else the run is refused before anything starts: exit 2, with an error naming the setting. flow-review never falls back to a visible window. A `cdp` flow connects to a browser that is already running and launches none; whatever `app.start` runs is the app's own command. Your own tests can hold the same rule with `launchBrowser(chromium, options)`, which launches headless by default and throws outside CI on `headless: false`, `devtools`, `--headed`, `ignoreDefaultArgs` that drops `--headless`, or Playwright's inspector (`PWDEBUG`), or with `assertHeadless(options)`, which only checks the options.
 
@@ -199,7 +199,8 @@ Each one also records whether it holds its Moment: `[data-moment="<kind>"]`, or 
 - `report.json` (`flow-review-report/0`): the summary (counts per check, human and agent sides), a table per flow, every unit with its time, key moments, `attachments[]` (external reports such as an Ouro AX X-ray), judges' answers and timing.
 - `findings.jsonl`: one finding a line, `{ flow, step, surface, cell, check, pass, measured, threshold, selector, label, evidence, fix, ms }`. `cell` is `{ viewport, theme, reducedMotion }`, or null on the agent side.
 - `evidence/`: a crop around each failing element with a red box, PNG or WebP under 300 KB (at most 3 per check per capture, 40 per unit).
-- `moments/`: each capture's picture, WebP, at most 1600 px wide, listed in `report.json`'s `captures[]`.
+- `moments/`: the pictures of the captures a judge packet names, WebP, at most 1600 px wide. `report.json`'s `captures[]` lists every capture, with its `crop` only when it kept the picture.
+- **The evidence cap.** A run (a shard) keeps pictures only for failing findings and for the key moments its judge packets name; a passing check has none, and a flow without a rubric keeps no moments. They are kept in that order, failing findings' crops first, up to `--evidence-max` bytes (default 1 MB; also `FLOW_REVIEW_EVIDENCE_MAX` or the action's `evidence-max`; `none` for no cap). `report.json`'s `evidence` records what was kept (`bytes`, `files`), what the cap dropped (`dropped: { evidence, moments, bytes }`) and how many captures no packet named (`unjudgedMoments`). A merge adds up its shards' and lists each in `shards[]`. The summary and the action warn when the cap dropped anything. This keeps shard artifacts small, so a merge downloads them quickly.
 - `judge-packet-<rubric>.json`: per rubric the flows name, the measurements, failing checks with crops and up to 24 key moments. A judge answers with `{ judge, verdict: "approve" | "not yet", moments: [{ step, cell, crop, observation, fix }] }` and never browses; `flow-review judge --merge` rejects an answer that names a step or crop the report doesn't have.
 - `summary.md`: the markdown table CI shows.
 
@@ -216,7 +217,7 @@ jobs:
     strategy: { fail-fast: false, matrix: { shard: [1/4, 2/4, 3/4, 4/4] } }
     steps:
       - uses: actions/checkout@v4
-      - uses: ourostack/flow-review@v0.3.4
+      - uses: ourostack/flow-review@v0.3.5
         with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", fail-on: none }
   merge:
     needs: review
@@ -225,7 +226,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "flow-review-*-of-*", path: shards }
-      - uses: ourostack/flow-review@v0.3.4
+      - uses: ourostack/flow-review@v0.3.5
         with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", fail-on: none }
 ```
 
@@ -261,7 +262,7 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.4`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.5`).
 
 ## Develop
 
