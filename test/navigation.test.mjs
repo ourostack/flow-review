@@ -32,6 +32,6 @@ test('readyAfterGoto takes load, domcontentloaded, networkidle or a target, in a
   const flow = (readyAfterGoto) => ({ name: 'x', surface: 'web', app: { url: 'http://127.0.0.1:1/', readyAfterGoto }, steps: [{ goto: '/' }] });
   for (const v of ['load', 'domcontentloaded', 'networkidle', { selector: '#ready' }, { role: 'heading', name: { regex: 'Plan' }, ms: 5000 }]) assert.deepEqual(validate('flow', flow(v)), [], JSON.stringify(v));
   assert.ok(validate('flow', flow('idle')).length > 0);
-  assert.ok(validate('flow', flow({})).length > 0, 'a target names something');
+  for (const v of [{}, { ms: 5000 }, { name: 'Plan' }, { exact: true }]) assert.ok(validate('flow', flow(v)).length > 0, `a target names a role, text or selector: ${JSON.stringify(v)}`);
   assert.deepEqual(validate('config', { schema: 'flow-review-config/0', surfaces: { web: { app: { start: 'x', readyAfterGoto: 'networkidle' } } } }), []);
 });
