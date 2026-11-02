@@ -125,6 +125,79 @@
             "flow"
           ],
           "description": "run (default): one app for every flow that starts it the same way; flow: a fresh one for each flow."
+        },
+        "readyAfterGoto": {
+          "description": "What a goto waits for once the page has navigated (web and cdp): \"load\" (default), \"domcontentloaded\", \"networkidle\" (up to 3 s; never comes while the page holds an event stream or socket open), or a target to wait for, { role, name, text, selector, ms }. Fonts, the images on screen and running animations are always waited for after it.",
+          "anyOf": [
+            {
+              "enum": [
+                "load",
+                "domcontentloaded",
+                "networkidle"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "role": {
+                  "type": "string"
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "regex"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "regex": {
+                          "type": "string"
+                        },
+                        "flags": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "selector": {
+                  "type": "string"
+                },
+                "exact": {
+                  "type": "boolean"
+                },
+                "ms": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "anyOf": [
+                {
+                  "required": [
+                    "role"
+                  ]
+                },
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "selector"
+                  ]
+                }
+              ]
+            }
+          ]
         }
       }
     },

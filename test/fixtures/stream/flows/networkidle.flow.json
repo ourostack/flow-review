@@ -1,0 +1,14 @@
+{
+  "schema": "flow-review/0",
+  "name": "Stream fixture: networkidle",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5303 test/fixtures/stream", "url": "http://127.0.0.1:5303/", "readyAfterGoto": "networkidle" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "id": "first", "goto": "/" },
+    { "id": "second", "goto": "/?again" },
+    { "id": "third", "goto": "/?once-more" },
+    { "capture": { "moment": "streamed" } }
+  ],
+  "checks": { "only": ["errors"] }
+}
