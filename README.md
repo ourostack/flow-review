@@ -9,7 +9,7 @@ It runs locally and in CI, and every check is also a plain function another repo
 Node 22.18 or newer. From the product repository:
 
 ```sh
-npm install --save-dev github:ourostack/flow-review#v0.3.3 && npx playwright install --only-shell chromium
+npm install --save-dev github:ourostack/flow-review#v0.3.4 && npx playwright install --only-shell chromium
 npx flow-review run                  # flows/**/*.flow.{ts,json}
 npx flow-review run 'flows/site/*.flow.ts' --only axe,contrast --fail-on none
 ```
@@ -27,6 +27,8 @@ In CI, use the action instead ([In CI](#in-ci)): it installs everything itself.
 | `validate [globs]` | Loads and checks flow files. |
 
 `FLOW_REVIEW_CHROMIUM` points at another Chromium build; `FLOW_REVIEW_CHANNEL=chrome` uses installed Chrome.
+
+**No visible browser outside CI.** Every browser flow-review launches is headless, so a run never shows a window, shows a Dock or taskbar icon, or takes focus on the machine someone is working on. A request for a visible browser (`--headed`, or `PWDEBUG` set for Playwright's inspector, which launches every browser headful) is allowed only where `CI=true`. Anywhere else the run is refused before anything starts: exit 2, with an error naming the setting. flow-review never falls back to a visible window. A `cdp` flow connects to a browser that is already running and launches none; whatever `app.start` runs is the app's own command. Your own tests can hold the same rule with `launchBrowser(chromium, options)`, which launches headless by default and throws outside CI on `headless: false`, `devtools`, `--headed`, `ignoreDefaultArgs` that drops `--headless`, or Playwright's inspector (`PWDEBUG`), or with `assertHeadless(options)`, which only checks the options.
 
 ## A flow
 
@@ -60,7 +62,7 @@ export default defineFlow({
 The flow file needs nothing installed: flow-review resolves `@ourostack/flow-review` itself. A `.flow.json` holds the same object (`"schema": "flow-review/0"`), checked by `flow-review schema flow`.
 
 - **`surface`:** `web` launches `app.start` (a shell command, from the working directory) and waits for `app.ready` (default `app.url`) to answer. `cdp` attaches to a running browser, Electron app or WebView at `app.cdpUrl`. `agent-cli` runs commands and `agent-http` sends requests.
-- **Steps, web and cdp:** `goto`, `act: { role, name, verb: click|press|type|hover|focus|hold, key?, text? }`, `waitFor`, `capture: { moment, region? }`, `tabTraverse`, `setTheme`, `resize`, `scroll`. Targets are found by role and accessible name first, `text` next, and a CSS `selector` last. Any step may carry `expect` (role, text, url, focus, count), `state` (`empty`, `error`, `loading`) and `route` (fixtures for that navigation only).
+- **Steps, web and cdp:** `goto`, `act: { role, name, verb: click|press|type|hover|focus|hold, key?, text? }`, `waitFor`, `capture: { moment, region? }`, `tabTraverse`, `setTheme`, `resize`, `scroll`. Targets are found by role and accessible name first, `text` next, and a CSS `selector` last. Any step may carry `expect` (role, text, url, focus, count), `state` (`empty`, `error`, `loading`) and `route` (fixtures on top of the flow's own). A `goto`'s routes stay in force until the next `goto` or the end of the flow, so they answer what the page asks for just after it loads; any other step's last for that step only.
 - **Holding a key:** `act: { verb: "hold", key, ms?, during?: [steps] }` presses `key` and keeps it down (on the target, focused first, when the act names one), waits `ms` (default 0), takes the `during` steps, then lets it go, whatever those steps did. A `capture` among them runs its checks on the page as it is while the key is down, and a `waitFor` there can wait for the held state to show. The hold's own `expect` is checked once the key is up, so it can say what comes back. Steps inside a hold are named after it (`compare.1-waitFor`, or `4-act.1-waitFor` for a hold without an `id`) unless they have an `id` or are a capture.
 
   ```ts
@@ -81,7 +83,7 @@ The flow file needs nothing installed: flow-review resolves `@ourostack/flow-rev
 
   A product can type its agent flows with its own definitions and extra fields: `test/fixtures/ax/` runs a flow written against its own `define.ts`, unchanged, on a stand-in mock and CLI.
 - **Matrix:** each viewport × theme × reduced-motion combination is a cell. Themes come from `prefers-color-scheme`, or from the flow's own `themeSteps` (`matrix.themeVia: "steps"`), for an app with its own toggle.
-- **Fixtures:** `fixtures.route` answers matching requests from a file, `json`, `body` or `status`. Requests to other origins are aborted (`app.blockExternal: false` allows them), so runs don't depend on the network.
+- **Fixtures:** `fixtures.route` answers matching requests from a file, `json`, `body` or `status`, for the whole flow. A step's `route` adds to them: a `goto`'s until the next `goto` or the end of the flow, any other step's for that step only (a step inside a hold or the theme steps adds its own on top of the outer step's). The most specific scope answers first: the step's routes, then the `goto`'s, then the flow's, and within each the first pattern that matches. A step's route that no request matched before then is an `unusedRoute` finding, which is advisory: it never fails the run. Requests to other origins are aborted (`app.blockExternal: false` allows them), so runs don't depend on the network.
 - **After a goto:** `app.readyAfterGoto` says what a `goto` waits for once the page has navigated: `"load"` (the default), `"domcontentloaded"`, `"networkidle"`, or a target such as `{ "selector": "#plan", "ms": 10000 }` (a `role` with its `name`, `text` or `selector`, and `ms`, default 15000; a longer `ms` lengthens the goto's step and cell limits to match). `networkidle` is opt-in. It waits up to 3 s and never comes while the page holds a stream open (live updates read through `fetch`, for example), so it would cost those 3 s on every goto. Whatever the choice, every goto, `waitFor`, act and capture then waits for fonts, the images on screen and running animations, plus two frames, so no layout shift is pending. A page that fills in after load (data it fetches) is caught by the flow's next `waitFor` or a declared `state`, or by a target here.
 - **Time limits:** `timeouts: { cellMs, stepMs }`. A cell (one matrix cell, or an agent flow's one unit) may take `cellMs` (default 120000, or the flow's longest `waitFor.ms` or step `timeoutMs`, counting a hold's `ms` and the steps it holds the key for, and 30 s more when that is longer and no `cellMs` is set), counted once its app is up (`app.readyTimeoutMs` bounds the start). Past it, the engine stops the cell: it closes its page (a `cdp` browser is only disconnected), kills its running command, and stops its app when the app is the flow's own (`scope: "flow"`) or no longer answers its ready URL, so the next cell starts it afresh. A `timeout` finding names the step it was on, that step's target and the time, and the run goes on with the next cell, so a shard always finishes and writes its report. A step may take `stepMs` (default 60000): a `goto`, `act` or `waitFor` that hangs fails that step, naming its target in `selector`. A `waitFor` with a longer `ms` gets that `ms` and 5 s more (a hold's `ms` likewise, for pressing the key; each step it holds the key for has its own limit), and an agent step's own `timeoutMs` wins. A flow's `timeouts` go over its config's.
 - **What fails it:** `failOn` (`any`, `none` or a comma list of checks) takes the place of `--fail-on` for this flow. A flow failing on `none` is advisory ([Coverage](#coverage-cancelled-shards-and-advisory-flows)).
@@ -170,6 +172,7 @@ Checks run at every `capture` and at the end of the flow. Keyboard and focus run
 | `known` | a step marked `known` passes now: remove the mark | — |
 | `step` | a step can't be done (its target isn't there, or it ran past `timeouts.stepMs`). It fails whatever checks `--fail-on` names | `timeouts.stepMs` (60000) |
 | `timeout` | a cell ran past its time limit and was stopped. Like `step`, it fails whatever checks `--fail-on` names | `timeouts.cellMs` (120000) |
+| `unusedRoute` | advisory, never fails the run: a step's `route` matched no request before its routes ended (a `goto`'s at the next `goto` or the end of the flow; another step's at the next step). The finding names the step and the pattern | — |
 | `coverage` | merge only: a unit didn't run (its shard was cancelled or wrote no report), ran twice, or, in an advisory flow, timed out. A gated unit's fails the merge (exit 3); an advisory one's doesn't | — |
 
 `checks.only` and `checks.skip` choose checks per flow; `checks.ignore` is a selector every check leaves out.
@@ -213,7 +216,7 @@ jobs:
     strategy: { fail-fast: false, matrix: { shard: [1/4, 2/4, 3/4, 4/4] } }
     steps:
       - uses: actions/checkout@v4
-      - uses: ourostack/flow-review@v0.3.3
+      - uses: ourostack/flow-review@v0.3.4
         with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", fail-on: none }
   merge:
     needs: review
@@ -222,7 +225,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "flow-review-*-of-*", path: shards }
-      - uses: ourostack/flow-review@v0.3.3
+      - uses: ourostack/flow-review@v0.3.4
         with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", fail-on: none }
 ```
 
@@ -258,7 +261,7 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.3`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.4`).
 
 ## Develop
 

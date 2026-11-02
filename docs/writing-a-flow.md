@@ -56,6 +56,7 @@ To make it yours, put it in your repository as `flows/<area>/<what-the-person-do
 - **Capture where the design matters.** Most checks run at each `capture`, so capture the first screen, each open dialog and each state, with a `region` when only part of the page is new.
 - **Walk the keyboard once.** One `tabTraverse` per screen that matters checks every stop is reached, ringed and not trapped.
 - **Declare the states.** Use `route` to serve an empty list, a server error or a failed request (`abort: true`), and mark the step with `state`. The `states` check fails a raw error ("HTTP 500", a stack) or a state with too few words to help.
+- **Put a page's routes on its `goto`.** A `goto`'s routes stay in force until the next `goto` or the end of the flow, so they answer what the page asks for after it loads, however late. Any other step's routes last for that step only: put them on the `act` whose request they answer. A route no request matched before it ended is reported as `unusedRoute`, an advisory finding that never fails the run; it usually means the route sits on the wrong step or its pattern is wrong.
 - **One job per flow.** "Read the list", "open an item", "recover from an error". Short flows fail clearly and shard evenly.
 
 ## An agent flow

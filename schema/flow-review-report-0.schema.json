@@ -76,6 +76,10 @@
         "failures": {
           "type": "integer"
         },
+        "advisories": {
+          "type": "integer",
+          "description": "Advisory findings (unusedRoute): reported, never failures."
+        },
         "byCheck": {
           "type": "object",
           "additionalProperties": {
@@ -350,6 +354,9 @@
           "type": "integer"
         },
         "fail": {
+          "type": "integer"
+        },
+        "advisory": {
           "type": "integer"
         },
         "ms": {

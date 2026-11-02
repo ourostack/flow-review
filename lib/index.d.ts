@@ -4,7 +4,7 @@
 export type CheckName =
   | "axe" | "keyboard" | "focusVisible" | "contrast" | "targetSize" | "overflow" | "deadSpace" | "repetition"
   | "cls" | "jank" | "designSystem" | "proofNotice" | "states" | "errors"
-  | "duoOverlap" | "duoReducedMotion" | "duoBytes" | "celebrationCap" | "quietMode"
+  | "duoOverlap" | "duoReducedMotion" | "duoBytes" | "celebrationCap" | "quietMode" | "unusedRoute"
   | "exit" | "jsonShape" | "fields" | "stdoutRules" | "stderrRules" | "status" | "text" | "maxMs" | "maxBytes" | "readOnly" | "listed" | "known" | "step"
   | "timeout" | "coverage";
 
@@ -47,7 +47,7 @@ interface StepBase {
   /** Where the state shows (default: main, else body). */
   stateRegion?: Target;
   expect?: Expect;
-  /** Routes for this step's navigation, on top of the flow's fixtures. */
+  /** Routes on top of the flow's fixtures: a goto's last until the next goto or the end of the flow; any other step's, for that step only. */
   route?: Record<string, string | RouteFixture>;
 }
 
@@ -261,6 +261,8 @@ export interface Finding {
   evidence?: string;
   fix?: string;
   ms?: number;
+  /** An advisory finding (unusedRoute): reported, never counted by --fail-on. */
+  advisory?: boolean;
 }
 
 /** Options every check takes: the flow's `checks` config shape. */
@@ -274,3 +276,14 @@ export declare const DEFAULT_THRESHOLDS: Required<Thresholds>;
 
 export declare function defineFlow<const F extends Flow>(flow: F): F;
 export declare const CHECKS: { ui: CheckName[]; agent: CheckName[] };
+
+/** Launch options a browser is started with (a subset of Playwright's). */
+export interface LaunchOptions { headless?: boolean; devtools?: boolean; args?: string[]; [key: string]: unknown }
+/** Whether this is CI (CI=true), where a visible browser is allowed. */
+export declare function isCI(env?: Record<string, string | undefined>): boolean;
+/** What in these options, or the environment (PWDEBUG), asks for a visible browser. */
+export declare function headfulReasons(options?: LaunchOptions, env?: Record<string, string | undefined>): string[];
+/** The options with headless on by default; throws outside CI when they, or the environment, ask for a visible browser. */
+export declare function assertHeadless<T extends LaunchOptions>(options?: T, env?: Record<string, string | undefined>): T & { headless: boolean };
+/** Launches a browser type (Playwright's chromium, say) headless, or headful only where CI=true. */
+export declare function launchBrowser<B>(browserType: { launch(options: LaunchOptions): Promise<B> }, options?: LaunchOptions, env?: Record<string, string | undefined>): Promise<B>;

@@ -1,0 +1,14 @@
+{
+  "schema": "flow-review/0",
+  "name": "Routes fixture: a goto's route answers after the load",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5305 test/fixtures/routes", "url": "http://127.0.0.1:5305/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "id": "open", "goto": "/", "route": { "**/api/late.json": { "json": { "text": "Routed late answer" } } } },
+    { "id": "routed", "waitFor": { "text": "Routed late answer", "ms": 5000 } },
+    { "id": "reopen", "goto": "/" },
+    { "id": "unrouted", "waitFor": { "text": "Server late answer", "ms": 5000 } }
+  ],
+  "checks": { "only": ["unusedRoute"] }
+}
