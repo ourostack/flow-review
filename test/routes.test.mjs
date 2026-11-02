@@ -26,6 +26,10 @@ test('a goto\'s routes outlive its step, another step\'s end with it, and unused
   assert.deepEqual(steps("another step's route lasts that step"), { open: 'pass', routed: 'pass', unrouted: 'pass' });
   assert.deepEqual(of("another step's route lasts that step").filter((f) => f.check === 'unusedRoute'), []);
 
+  // A step's narrower route answers before its goto's broader one, which answers again once the step is over.
+  assert.deepEqual(steps("a step's route wins over its goto's"), { open: 'pass', late: 'pass', step: 'pass', again: 'pass', 'goto-answers': 'pass' });
+  assert.deepEqual(of("a step's route wins over its goto's").filter((f) => f.check === 'unusedRoute'), []);
+
   // A route no request matched names its step and pattern, and fails nothing.
   assert.deepEqual(steps('unused routes'), { open: 'pass', routed: 'pass', press: 'pass', pressed: 'pass' });
   const unused = of('unused routes').filter((f) => f.check === 'unusedRoute').map(({ step, pass, advisory, measured }) => ({ step, pass, advisory, measured }));
