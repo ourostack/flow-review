@@ -38,7 +38,8 @@ jobs:
           key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --only-shell chromium
-      - run: npm test
+      # The constrained-computer tests measure speed, so they run alone, on each platform, in the constrain job.
+      - run: node --test test/*.test.mjs
 
   # The constrained computer on each platform it supports: the CPU slowdown measured at about 4x, a grandchild slowed
   # as much, the memory cap enforced (Windows, Linux) or detected (macOS), the proxy's latency, and pages throttled.
@@ -68,7 +69,7 @@ jobs:
           key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --only-shell chromium
-      - run: node --test --test-reporter=spec test/constrain.test.mjs
+      - run: npm run test:constrain
 
   # The action on the fixture flows, which fail on purpose: report only here.
   action:

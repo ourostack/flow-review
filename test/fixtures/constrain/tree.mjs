@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 
 const [iterations, url] = process.argv.slice(2);
-const grandchild = spawnSync(process.execPath, ['--input-type=module', '-e', `import { timeSpin } from ${JSON.stringify(new URL('../../../lib/constrain-calibrate.mjs', import.meta.url).href)}; console.log(timeSpin(${Number(iterations)}, 3));`], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } });
+const grandchild = spawnSync(process.execPath, ['--input-type=module', '-e', `import { timeSpin, warmUp } from ${JSON.stringify(new URL('../../../lib/constrain-calibrate.mjs', import.meta.url).href)}; warmUp(); console.log(timeSpin(${Number(iterations)}, 3));`], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } });
 const out = { grandchildMs: Number(grandchild.stdout.trim()), env: process.env.FLOW_REVIEW_CONSTRAINED ? JSON.parse(process.env.FLOW_REVIEW_CONSTRAINED) : null, proxy: process.env.HTTP_PROXY ?? null };
 let t = performance.now();
 for (let i = 0; i < 5; i++) fs.statSync(process.execPath);

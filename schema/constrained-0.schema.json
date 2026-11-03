@@ -46,6 +46,7 @@
         "rate": { "type": ["integer", "null"], "description": "Windows: the job's CPU rate, in cycles per 10,000 across all processors." },
         "quota": { "type": ["string", "null"], "description": "Linux: the cgroup's cpu.max." },
         "duty": { "type": "object" },
+        "dutyRatio": { "type": "number", "description": "macOS and Linux without a cgroup: the duty cycle's whole-cycle to run ratio after correction." },
         "cpuSeconds": { "type": "number" },
         "processes": { "type": "integer" },
         "throttledPeriods": { "type": "integer" }

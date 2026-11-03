@@ -321,7 +321,7 @@ any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the 
 npm ci && npx playwright install --only-shell chromium && npm test
 ```
 
-The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers.
+The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers. The constrained-computer tests (`npm run test:constrain`, last in `npm test`) measure speed, so they run on their own, one at a time; CI runs them on Windows, macOS and Linux.
 
 ## Not in v0 yet
 

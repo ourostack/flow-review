@@ -1,6 +1,7 @@
 // Constrained computer: the profile, the slow-network proxy, the slow-disk preload, the DevTools throttling of pages,
 // and the CLI end to end on this platform: the CPU slowdown it measures, a grandchild slowed as much, the memory cap
-// enforced or detected, and a run's report marked as constrained.
+// enforced or detected, and a run's report marked as constrained. These tests measure speed, so they run on their own
+// (npm run test:constrain), never alongside the other test files.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,16 +11,16 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { resolveSettings, constrainedFromEnv, bannerLine, PROFILES, CONSTRAINED_ENV } from '../lib/constrain-profile.mjs';
-import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv } from '../lib/constrain.mjs';
-import { startDelayProxy } from '../lib/constrain-proxy.mjs';
-import { constrainPage, constrainCdp } from '../lib/constrain-cdp.mjs';
-import { baseline, within } from '../lib/constrain-calibrate.mjs';
-import { assertHeadless } from '../lib/browser.mjs';
-import { validate } from '../lib/schema.mjs';
-import { launch, close } from './helpers.mjs';
+import { resolveSettings, constrainedFromEnv, bannerLine, PROFILES, CONSTRAINED_ENV } from '../../lib/constrain-profile.mjs';
+import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv } from '../../lib/constrain.mjs';
+import { startDelayProxy } from '../../lib/constrain-proxy.mjs';
+import { constrainPage, constrainCdp } from '../../lib/constrain-cdp.mjs';
+import { baseline, within } from '../../lib/constrain-calibrate.mjs';
+import { assertHeadless } from '../../lib/browser.mjs';
+import { validate } from '../../lib/schema.mjs';
+import { launch, close } from '../helpers.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const scratch = path.join(root, '.scratch', 'constrain');
 const fixture = (f) => path.join(root, 'test', 'fixtures', 'constrain', f);
 const run = (args, env = {}) => new Promise((resolve) => {
@@ -194,7 +195,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
   try {
     const { iterations } = baseline(150);
     const plain = spawnSync(process.execPath, [fixture('tree.mjs'), String(iterations)], { encoding: 'utf8', env: { ...process.env, [CONSTRAINED_ENV]: '' } });
-    const base = JSON.parse(plain.stdout.split('TREE ')[1]);
+    const base = JSON.parse(plain.stdout.split('TREE ')[1].split('\n')[0]);
     const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stderr, /CONSTRAINED COMPUTER \(old-windows-laptop\): CPU 4× slower \(measured [\d.]+×, (job-cpu-rate|cgroup-cpu-max|duty-cycle)\)/, 'a banner before');
@@ -208,7 +209,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.ok(summary.cpu.achieved >= 3 && summary.cpu.achieved <= 5, `measured ${summary.cpu.achieved}×`);
     assert.equal(summary.ok, true);
     assert.deepEqual(summary.capsHit, []);
-    const tree = JSON.parse(r.stdout.split('TREE ')[1]);
+    const tree = JSON.parse(r.stdout.split('TREE ')[1].split('\n')[0]);
     const ratio = tree.grandchildMs / base.grandchildMs;
     console.log(`a grandchild ran the loop in ${tree.grandchildMs.toFixed(0)} ms, ${base.grandchildMs.toFixed(0)} ms unconstrained: ${ratio.toFixed(2)}×`);
     assert.ok(ratio >= 2.8 && ratio <= 5.5, `a grandchild ran ${ratio.toFixed(2)}× slower, not about 4×`);
@@ -264,8 +265,15 @@ test('flow-review constrain refuses without a command and prints what it would u
   assert.ok(printed.mechanisms.cpu);
 });
 
-test('flow-review run --constrained slows its pages and marks the report', { timeout: 120_000 }, async () => {
+test('flow-review run --constrained slows its pages and marks the report', { timeout: 120_000 }, async (t) => {
   const out = path.join(scratch, 'run');
+  // The site is served here, not by the flow's app.start, so the test is about constrained mode alone.
+  const site = spawn(process.execPath, ['test/fixtures/serve.mjs', '5311', 'test/fixtures/site'], { cwd: root, stdio: 'ignore' });
+  t.after(() => site.kill());
+  for (let i = 0; i < 50; i++) {
+    if (await fetch('http://127.0.0.1:5311/').then((r) => r.ok, () => false)) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
   const r = await run(['run', 'test/fixtures/constrain/flows/*.flow.json', '--constrained', 'old-windows-laptop', '--fail-on', 'none', '--out', out]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stderr, /flow-review: CONSTRAINED COMPUTER \(old-windows-laptop\)/);

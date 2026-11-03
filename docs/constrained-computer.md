@@ -53,7 +53,10 @@ banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
 - Linux: when `CI=true` and `sudo -n` works (as on GitHub's runners), a cgroup with `cpu.max` of a quarter of one core:
   the same as Windows. `--cpu-mechanism cgroup` asks for it anywhere; `duty-cycle` refuses it.
 - macOS, and Linux without the cgroup: the tree is stopped (`SIGSTOP`) and continued (`SIGCONT`) in turn, running a
-  quarter of every 50 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. Processes that
+  quarter of every 50 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The cycle
+  counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
+  grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
+  measured again, up to twice (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
   leave the tree's process group (a browser Playwright launches) are found by parent and signalled one by one, within
   a quarter of a second of starting. If the constraining process is killed outright, the tree may be left stopped;
   `kill -CONT -<pid>` frees it.
@@ -61,7 +64,9 @@ banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
   { calibrate: true })` measures it too. A page whose processes are already in a constrained tree isn't throttled
   again, so nothing is slowed twice.
 
-The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too.
+The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too. On a
+heavily loaded computer, and on Apple silicon, where a process can move between performance and efficiency cores, the
+measurement is noisier; a run that misses the tolerance doesn't run its command rather than report a false factor.
 
 **Memory.** Windows caps the tree's committed memory (private bytes), so an allocation past the cap fails, as it would
 on a computer out of memory. Linux caps resident memory and page cache and kills the largest process past it. macOS
