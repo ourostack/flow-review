@@ -33,7 +33,7 @@
       "required": ["target", "mechanism", "enforcement", "scope", "achieved", "tolerance", "within"],
       "properties": {
         "target": { "type": "number" },
-        "mechanism": { "enum": ["job-cpu-rate", "cgroup-cpu-max", "duty-cycle", null] },
+        "mechanism": { "enum": ["job-duty-cycle", "job-cpu-rate", "cgroup-cpu-max", "duty-cycle", null] },
         "enforcement": { "enum": ["enforced", null] },
         "scope": { "enum": ["tree", "thread", null], "description": "tree: the whole process tree shares one core slowed by the factor; thread: every thread runs slowed by the factor, in parallel." },
         "achieved": { "type": ["number", "null"], "description": "The slowdown the calibration loop measured inside the tree before the command started." },
@@ -46,7 +46,9 @@
         "rate": { "type": ["integer", "null"], "description": "Windows: the job's CPU rate, in cycles per 10,000 across all processors." },
         "quota": { "type": ["string", "null"], "description": "Linux: the cgroup's cpu.max." },
         "duty": { "type": "object" },
-        "dutyRatio": { "type": "number", "description": "macOS and Linux without a cgroup: the duty cycle's whole-cycle to run ratio after correction." },
+        "dutyRatio": { "type": "number", "description": "A duty cycle's whole-cycle to run ratio after correction." },
+        "corrections": { "type": "integer", "description": "How many times the mechanism was corrected after a calibration more than 5% off (at most 2)." },
+        "burst": { "type": "object", "description": "About 10 ms bursts of work with idle between, as an app's events: their median time before and under the constraint, and the factor.", "properties": { "baselineMs": { "type": "number" }, "constrainedMs": { "type": "number" }, "achieved": { "type": "number" } } },
         "cpuSeconds": { "type": "number" },
         "processes": { "type": "integer" },
         "throttledPeriods": { "type": "integer" }

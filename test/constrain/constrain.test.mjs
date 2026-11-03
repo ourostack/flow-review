@@ -43,6 +43,7 @@ const viaProxy = (proxy, url) => new Promise((resolve, reject) => {
   }).on('error', reject);
 });
 fs.mkdirSync(scratch, { recursive: true });
+const describe = (summary) => { const c = summary.cpu; return `${c.mechanism} measured ${c.achieved}× (${c.baselineMs} ms -> ${c.constrainedMs} ms${c.corrections ? `, ${c.corrections} corrections` : ''}${c.dutyRatio ? `, ratio ${c.dutyRatio}` : ''}${c.rate ? `, rate ${c.rate}` : ''}${c.quota ? `, quota ${c.quota}` : ''}); 10 ms bursts ${c.burst?.achieved}× (${c.burst?.baselineMs} ms -> ${c.burst?.constrainedMs} ms)`; };
 
 test('the old-windows-laptop profile, overrides and the environment switch', () => {
   const s = resolveSettings('old-windows-laptop');
@@ -66,14 +67,17 @@ test('the old-windows-laptop profile, overrides and the environment switch', () 
 
 test('each platform picks what it can enforce, and says so', () => {
   const s = resolveSettings();
-  assert.deepEqual(pickMechanisms(s, { platform: 'win32' }), { cpu: 'job-cpu-rate', memory: 'job-memory' });
+  assert.deepEqual(pickMechanisms(s, { platform: 'win32' }), { cpu: 'job-duty-cycle', memory: 'job-memory' });
+  assert.deepEqual(pickMechanisms(s, { platform: 'win32', cpuMechanism: 'hard-cap' }), { cpu: 'job-cpu-rate', memory: 'job-memory' });
   assert.deepEqual(pickMechanisms(s, { platform: 'darwin' }), { cpu: 'duty-cycle', memory: 'rss-watch' });
   assert.deepEqual(pickMechanisms(s, { platform: 'linux', env: { CI: 'true' }, cgroup: () => true }), { cpu: 'cgroup-cpu-max', memory: 'cgroup-memory-max' });
+  assert.deepEqual(pickMechanisms(s, { platform: 'linux', env: { CI: 'true' }, cgroup: () => true, cpuMechanism: 'duty-cycle' }), { cpu: 'duty-cycle', memory: 'cgroup-memory-max' });
   assert.deepEqual(pickMechanisms(s, { platform: 'linux', env: {}, cgroup: () => true }), { cpu: 'duty-cycle', memory: 'rss-watch' }, 'outside CI, no sudo');
   assert.deepEqual(pickMechanisms(s, { platform: 'linux', env: { CI: 'true' }, cgroup: () => false }), { cpu: 'duty-cycle', memory: 'rss-watch' });
   assert.deepEqual(pickMechanisms(resolveSettings(undefined, { cpu: 1, memoryMB: 0 }), { platform: 'win32' }), { cpu: null, memory: null });
-  assert.throws(() => pickMechanisms(s, { platform: 'linux', cpuMechanism: 'cgroup', cgroup: () => false }), /sudo without a password/);
-  assert.throws(() => pickMechanisms(s, { platform: 'win32', cpuMechanism: 'duty-cycle' }), /isn't available on Windows/);
+  assert.throws(() => pickMechanisms(s, { platform: 'linux', cpuMechanism: 'hard-cap', cgroup: () => false }), /sudo without a password/);
+  assert.throws(() => pickMechanisms(s, { platform: 'darwin', cpuMechanism: 'hard-cap' }), /no hard CPU cap/);
+  assert.throws(() => pickMechanisms(s, { platform: 'win32', cpuMechanism: 'job' }), /unknown CPU mechanism job/);
   assert.equal(jobCpuRate(4, 4), 625, 'one core of four, at a quarter');
   assert.equal(jobCpuRate(4, 1), 2500);
   assert.equal(windowsCommandLine('npm', ['run', 'say "hi"', 'C:\\a b\\']), 'npm run "say \\"hi\\"" "C:\\a b\\\\"');
@@ -202,9 +206,9 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.match(r.stderr, /CONSTRAINED COMPUTER [^\n]*: exit 0; no caps hit/, 'and after');
     const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
     assert.deepEqual(validate('constrained', summary), []);
-    const expected = { win32: 'job-cpu-rate', darwin: 'duty-cycle' }[process.platform] ?? (process.env.CI === 'true' && summary.cpu.mechanism === 'cgroup-cpu-max' ? 'cgroup-cpu-max' : 'duty-cycle');
+    const expected = { win32: 'job-duty-cycle', darwin: 'duty-cycle' }[process.platform] ?? (process.env.CI === 'true' && summary.cpu.mechanism === 'cgroup-cpu-max' ? 'cgroup-cpu-max' : 'duty-cycle');
     assert.equal(summary.cpu.mechanism, expected);
-    console.log(`constrain on ${summary.platform} (${summary.cpu.cpus} CPUs): ${summary.cpu.mechanism} measured ${summary.cpu.achieved}× (${summary.cpu.baselineMs} ms -> ${summary.cpu.constrainedMs} ms); memory ${summary.memory.mechanism} (${summary.memory.enforcement}), peak ${summary.memory.peakMB} MB`);
+    console.log(`constrain on ${summary.platform} (${summary.cpu.cpus} CPUs): ${describe(summary)}; memory ${summary.memory.mechanism} (${summary.memory.enforcement}), peak ${summary.memory.peakMB} MB`);
     assert.equal(summary.cpu.within, true);
     assert.ok(summary.cpu.achieved >= 3 && summary.cpu.achieved <= 5, `measured ${summary.cpu.achieved}×`);
     assert.equal(summary.ok, true);
@@ -224,14 +228,14 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
   }
 });
 
-test('flow-review constrain: the duty cycle, where a cgroup is used by default', { skip: process.platform !== 'linux', timeout: 60_000 }, async () => {
-  const summaryFile = path.join(scratch, 'duty.json');
-  const r = await run(['constrain', '--cpu-mechanism', 'duty-cycle', '--summary', summaryFile, '--', 'node', '-e', '0']);
+test("flow-review constrain: the platform's other CPU mechanism", { skip: process.platform === 'darwin' && 'macOS has only the duty cycle', timeout: 60_000 }, async () => {
+  const other = process.platform === 'win32' ? ['hard-cap', 'job-cpu-rate'] : ['duty-cycle', 'duty-cycle'];
+  const summaryFile = path.join(scratch, 'other.json');
+  const r = await run(['constrain', '--cpu-mechanism', other[0], '--summary', summaryFile, '--', 'node', '-e', '0']);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
-  console.log(`duty cycle on ${summary.platform}: measured ${summary.cpu.achieved}×`);
+  console.log(`${other[0]} on ${summary.platform}: ${describe(summary)}`);
+  assert.equal(summary.cpu.mechanism, other[1]);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(summary.cpu.mechanism, 'duty-cycle');
-  assert.equal(summary.memory.mechanism, 'rss-watch');
   assert.equal(summary.cpu.within, true);
 });
 

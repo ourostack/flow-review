@@ -410,7 +410,7 @@ export interface ConstrainedSettings {
   tree?: { cpu: CpuMechanism | null; memory: MemoryMechanism | null; achieved: number | null };
   proxy?: string | null;
 }
-export type CpuMechanism = "job-cpu-rate" | "cgroup-cpu-max" | "duty-cycle";
+export type CpuMechanism = "job-duty-cycle" | "job-cpu-rate" | "cgroup-cpu-max" | "duty-cycle";
 export type MemoryMechanism = "job-memory" | "cgroup-memory-max" | "rss-watch";
 export interface ConstrainedOverrides { cpu?: number | string; memoryMB?: number | string; disk?: { latencyMs?: number | string; mbPerSec?: number | string }; network?: { latencyMs?: number | string; downKbps?: number | string; upKbps?: number | string } }
 export interface ConstrainedSummary {
@@ -444,7 +444,7 @@ export declare const CONSTRAINED_SCHEMA: "flow-review-constrained-0";
 export declare function resolveSettings(profile?: string, overrides?: ConstrainedOverrides): ConstrainedSettings;
 export declare function constrainedFromEnv(env?: Record<string, string | undefined>): ConstrainedSettings | null;
 export declare function bannerLine(settings: ConstrainedSettings, extra?: { cpu?: { achieved?: number | null; mechanism?: string | null } | null; memory?: { enforcement?: string | null } | null }): string;
-export declare function pickMechanisms(settings: ConstrainedSettings, opts?: { cpuMechanism?: "auto" | "job" | "cgroup" | "duty-cycle"; platform?: string; env?: Record<string, string | undefined>; cgroup?: () => boolean }): { cpu: CpuMechanism | null; memory: MemoryMechanism | null };
+export declare function pickMechanisms(settings: ConstrainedSettings, opts?: { cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; platform?: string; env?: Record<string, string | undefined>; cgroup?: () => boolean }): { cpu: CpuMechanism | null; memory: MemoryMechanism | null };
 export declare function constrainedEnv(env: Record<string, string | undefined>, info: ConstrainedSettings, proxyUrl?: string | null): Record<string, string>;
 export interface ConstrainedRun {
   /** Resolves once the slowdown is measured and the command has started. */
@@ -453,7 +453,7 @@ export interface ConstrainedRun {
   done: Promise<ConstrainedSummary>;
   stop(signal?: string): void;
 }
-export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "job" | "cgroup" | "duty-cycle"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null }
+export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null }
 export declare function launchConstrained(command: string, args?: string[], options?: ConstrainOptions): ConstrainedRun;
 export declare function runConstrainedCommand(command: string, args?: string[], options?: ConstrainOptions): Promise<ConstrainedSummary>;
 export declare function constrainPage(page: import("playwright").Page, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<CdpConstraintResult | null>;
