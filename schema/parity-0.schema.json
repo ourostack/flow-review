@@ -57,7 +57,7 @@
         "act": { "type": "array", "items": { "$ref": "#/definitions/step" } },
         "expect": {
           "type": "object",
-          "description": "A hook floor, checked with a sample open: at least min (default 1) and at most max elements match selector; each has attr (a value, true for present, null for absent), no text exactly in textNot, and a box when visible.",
+          "description": "A hook floor, checked with a sample open: at least min (default 1) and at most max elements match selector; each has attr (a value, true for present, null for absent), no text exactly in textNot; with visible, at least min of them have a box.",
           "required": ["selector"],
           "additionalProperties": false,
           "properties": {

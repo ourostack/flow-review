@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { meets, detect, pickSamples, hashKey, runParity, parityIssues, parityTable, parityBaseline, parityCompare, validateParitySpec, launchGuarded, fill } from '../lib/parity.mjs';
+import { meets, detect, pickSamples, hashKey, runParity, parityIssues, parityTable, parityBaseline, parityCompare, validateParitySpec, launchGuarded, fill, expectHook } from '../lib/parity.mjs';
 import { validate } from '../lib/schema.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -234,6 +234,24 @@ test('a run on a guarded page: pass, gap, unread and not present, counts only, a
   } finally {
     await g?.close();
     await srv.close();
+  }
+});
+
+test('hook expectations: counts, attributes, text ruled out, and visible meaning enough of them on screen', async () => {
+  let g;
+  try {
+    g = await launchGuarded({ url: `data:text/html,${encodeURIComponent('<div data-x="a">One</div><div data-x="b" hidden>Two</div><span data-y="z">Unknown</span>')}` });
+    assert.equal(await expectHook(g.page, { selector: '[data-x]', min: 2 }), null);
+    assert.equal(await expectHook(g.page, { selector: '[data-x]', min: 3 }, {}, 200), 'missing');
+    assert.equal(await expectHook(g.page, { selector: '[data-x]', max: 1 }), 'extra');
+    assert.equal(await expectHook(g.page, { selector: '[data-x]', visible: true }), null);
+    assert.equal(await expectHook(g.page, { selector: '[data-x]', min: 2, visible: true }), 'hidden');
+    assert.equal(await expectHook(g.page, { selector: '[data-x]', attr: { 'data-x': 'a' } }), 'attr');
+    assert.equal(await expectHook(g.page, { selector: '[data-y]', attr: { 'data-y': true, 'data-w': null } }), null);
+    assert.equal(await expectHook(g.page, { selector: '[data-y]', textNot: ['Unknown'] }), 'text');
+    assert.equal(await expectHook(g.page, { selector: '[data-none]', min: 0, max: 0 }), null);
+  } finally {
+    await g?.close();
   }
 });
 
