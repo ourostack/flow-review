@@ -43,7 +43,7 @@ const viaProxy = (proxy, url) => new Promise((resolve, reject) => {
   }).on('error', reject);
 });
 fs.mkdirSync(scratch, { recursive: true });
-const describe = (summary) => { const c = summary.cpu; return `${c.mechanism} measured ${c.achieved}× (${c.baselineMs} ms -> ${c.constrainedMs} ms${c.corrections ? `, ${c.corrections} corrections` : ''}${c.dutyRatio ? `, ratio ${c.dutyRatio}` : ''}${c.rate ? `, rate ${c.rate}` : ''}${c.quota ? `, quota ${c.quota}` : ''}); 10 ms bursts ${c.burst?.achieved}× (${c.burst?.baselineMs} ms -> ${c.burst?.constrainedMs} ms)`; };
+const describe = (summary) => { const c = summary.cpu; return `${c.mechanism} measured ${c.achieved}× (${c.baselineMs} ms -> ${c.constrainedMs} ms${c.corrections ? `, ${c.corrections} corrections` : ''}${c.dutyRatio ? `, ratio ${c.dutyRatio}` : ''}${c.rate ? `, rate ${c.rate}` : ''}${c.quota ? `, quota ${c.quota}` : ''}); 10 ms tasks ${c.burst?.achieved}× (${c.burst?.baselineMs} ms -> ${c.burst?.constrainedMs} ms)`; };
 
 test('the old-windows-laptop profile, overrides and the environment switch', () => {
   const s = resolveSettings('old-windows-laptop');
@@ -202,7 +202,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     const base = JSON.parse(plain.stdout.split('TREE ')[1].split('\n')[0]);
     const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stderr, /CONSTRAINED COMPUTER \(old-windows-laptop\): CPU 4× slower \(measured [\d.]+×, (job-cpu-rate|cgroup-cpu-max|duty-cycle)\)/, 'a banner before');
+    assert.match(r.stderr, /CONSTRAINED COMPUTER \(old-windows-laptop\): CPU 4× slower \(measured [\d.]+×, 10 ms tasks [\d.]+×, (job-duty-cycle|cgroup-cpu-max|duty-cycle)\)/, 'a banner before');
     assert.match(r.stderr, /CONSTRAINED COMPUTER [^\n]*: exit 0; no caps hit/, 'and after');
     const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
     assert.deepEqual(validate('constrained', summary), []);
