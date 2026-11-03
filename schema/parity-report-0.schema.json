@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/parity-report-0.schema.json",
+  "title": "flow-review-parity-report/0",
+  "description": "What a parity run found: counts, capability ids and salted hashes of the records it opened. Never a record's text, a name, an id or a picture.",
+  "type": "object",
+  "required": ["schema", "tool", "spec", "startedAt", "finishedAt", "ms", "summary", "results"],
+  "properties": {
+    "schema": { "const": "flow-review-parity-report-0" },
+    "tool": { "type": "object", "required": ["name", "version"], "properties": { "name": { "type": "string" }, "version": { "type": "string" } } },
+    "spec": { "type": "object", "required": ["name", "version", "sha256"], "properties": { "name": { "type": "string" }, "version": { "type": "integer" }, "sha256": { "type": "string" } } },
+    "target": {},
+    "startedAt": { "type": "string" }, "finishedAt": { "type": "string" }, "ms": { "type": "number" },
+    "guard": {
+      "anyOf": [{ "type": "null" }, {
+        "type": "object",
+        "properties": { "allowed": { "type": "integer" }, "blocked": { "type": "integer" }, "blockedRemote": { "type": "integer" }, "blockedLocal": { "type": "integer" }, "blockedByMethod": { "type": "object", "additionalProperties": { "type": "integer" } }, "sockets": { "type": "object" } }
+      }]
+    },
+    "summary": { "type": "object", "required": ["pass", "gap", "unread", "not-present"], "additionalProperties": { "type": "integer" } },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["surface", "capability", "status", "detected", "checked", "passed", "floors", "samples"],
+        "properties": {
+          "surface": { "type": "string" }, "capability": { "type": "string" }, "title": { "type": "string" },
+          "owner": { "type": ["string", "null"] },
+          "status": { "enum": ["pass", "gap", "unread", "not-present"] },
+          "scoped": { "type": "integer" }, "detected": { "type": "integer" }, "checked": { "type": "integer" }, "passed": { "type": "integer" },
+          "unread": { "type": "array", "items": { "type": "string" } },
+          "floors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "kind", "pass", "fail"],
+              "properties": {
+                "id": { "type": "string" }, "kind": { "enum": ["data", "hook"] }, "pass": { "type": "integer" }, "fail": { "type": "integer" },
+                "ratio": { "type": "number" }, "min": { "type": "number" },
+                "reasons": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "Why samples failed: open, step, missing, extra, attr, text, hidden, error, ratio." }
+              }
+            }
+          },
+          "samples": { "type": "array", "items": { "type": "string", "pattern": "^h:[0-9a-f]{12}$" } },
+          "ms": { "type": "number" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/parity-0.schema.json",
+  "title": "flow-review-parity/0",
+  "description": "A capability parity spec: surfaces, their capabilities, a data detector for each and the floor it must meet. Compares capability and interaction model, not pixels.",
+  "type": "object",
+  "required": ["version", "name", "surfaces"],
+  "additionalProperties": false,
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "condition": {
+      "type": "object",
+      "description": "One test on a record. Every key given must hold. path is dotted (a number segment indexes an array); without it, the record itself.",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "exists": { "type": "boolean", "description": "Present: not undefined, null, an empty string or an empty array." },
+        "eq": {}, "ne": {},
+        "in": { "type": "array" }, "notIn": { "type": "array" },
+        "gte": { "type": "number" }, "lte": { "type": "number" },
+        "match": { "type": "string", "description": "A regular expression the string value matches." },
+        "flags": { "type": "string", "pattern": "^[imsu]*$" },
+        "minItems": { "type": "integer", "minimum": 0 },
+        "some": { "type": "array", "items": { "$ref": "#/definitions/condition" }, "description": "An item of the array at path meets all of these." },
+        "deep": { "type": "array", "items": { "$ref": "#/definitions/condition" }, "description": "Any object anywhere under path meets all of these." },
+        "anyOf": { "type": "array", "items": { "anyOf": [{ "$ref": "#/definitions/condition" }, { "type": "array", "items": { "$ref": "#/definitions/condition" } }] } },
+        "not": { "anyOf": [{ "$ref": "#/definitions/condition" }, { "type": "array", "items": { "$ref": "#/definitions/condition" } }] }
+      }
+    },
+    "where": { "type": "array", "items": { "$ref": "#/definitions/condition" } },
+    "step": {
+      "type": "object",
+      "description": "One interaction before a hook check. Selectors are Playwright locators (CSS, or role=...); ${arg} is filled from the sample's open.args.",
+      "additionalProperties": false,
+      "properties": {
+        "click": { "type": "string" }, "hover": { "type": "string" }, "focus": { "type": "string" },
+        "press": { "type": "string" }, "waitFor": { "type": "string" },
+        "waitMs": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "timeoutMs": { "type": "integer", "minimum": 0 },
+        "optional": { "type": "boolean", "description": "When it can't be done (a fold that isn't there), go on." }
+      }
+    },
+    "floor": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "title": { "type": "string" },
+        "data": {
+          "type": "object",
+          "description": "A data floor: at least min (0 to 1, default 1) of the detected records meet where.",
+          "required": ["where"],
+          "additionalProperties": false,
+          "properties": { "where": { "$ref": "#/definitions/where" }, "min": { "type": "number", "minimum": 0, "maximum": 1 } }
+        },
+        "act": { "type": "array", "items": { "$ref": "#/definitions/step" } },
+        "expect": {
+          "type": "object",
+          "description": "A hook floor, checked with a sample open: at least min (default 1) and at most max elements match selector; each has attr (a value, true for present, null for absent), no text exactly in textNot, and a box when visible.",
+          "required": ["selector"],
+          "additionalProperties": false,
+          "properties": {
+            "selector": { "type": "string" },
+            "min": { "type": "integer", "minimum": 0 },
+            "max": { "type": "integer", "minimum": 0 },
+            "attr": { "type": "object", "additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "boolean", "const": true }, { "type": "null" }] } },
+            "textNot": { "type": "array", "items": { "type": "string" } },
+            "visible": { "type": "boolean" },
+            "timeoutMs": { "type": "integer", "minimum": 0 }
+          }
+        }
+      },
+      "oneOf": [{ "required": ["data"], "not": { "anyOf": [{ "required": ["expect"] }, { "required": ["act"] }] } }, { "required": ["expect"], "not": { "required": ["data"] } }]
+    },
+    "capability": {
+      "type": "object",
+      "required": ["id", "title", "detect", "floor"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "title": { "type": "string" },
+        "owner": { "type": "string", "description": "Who a gap goes to (the product's own label or team)." },
+        "intent": { "type": "string", "description": "The floor in words: what the person can do, and the familiar interaction model it keeps." },
+        "detect": {
+          "type": "object",
+          "required": ["records"],
+          "additionalProperties": false,
+          "properties": {
+            "records": { "type": "string", "description": "Which of the product's records to look in." },
+            "scope": { "$ref": "#/definitions/where", "description": "The records this capability could apply to at all." },
+            "requires": { "type": "array", "items": { "type": "string" }, "description": "Paths some scoped record must carry; when none does, the product doesn't read what the detector needs, and the capability is unread." },
+            "where": { "$ref": "#/definitions/where", "description": "Of the scoped records, the ones that call for this capability." },
+            "key": { "type": "string", "description": "The path of a record's key (default id): hashed, never reported." }
+          }
+        },
+        "open": {
+          "type": "object",
+          "description": "How to show a sample: the product's opener and the record paths it takes.",
+          "additionalProperties": false,
+          "properties": { "with": { "type": "string" }, "args": { "type": "object", "additionalProperties": { "type": "string" } } }
+        },
+        "samples": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "floor": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/floor" } }
+      }
+    }
+  },
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "minimum": 0, "description": "The spec's own version; bump it when what it checks changes." },
+    "name": { "$ref": "#/definitions/id" },
+    "title": { "type": "string" },
+    "samples": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Records opened per capability (default 3)." },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "capabilities"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/definitions/id" },
+          "title": { "type": "string" },
+          "owner": { "type": "string" },
+          "capabilities": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/capability" } }
+        }
+      }
+    }
+  }
+}
