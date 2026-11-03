@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { assertHeadless, launchBrowser } from '../lib/browser.mjs';
+import { assertHeadless, launchBrowser, launchPersistentBrowser } from '../lib/browser.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = { CI: '' };
@@ -42,6 +42,11 @@ test('with CI=true a headful launch is allowed', async () => {
   assert.equal(await launchBrowser(fake, { headless: false }, ci), 'browser');
   await assert.rejects(launchBrowser(fake, { headless: false }, local), /outside CI/);
   assert.deepEqual(asked, [{ headless: false }], 'outside CI the browser type is never asked to launch');
+  const persistent = [];
+  const fakePersistent = { launchPersistentContext: async (dir, o) => { persistent.push([dir, o]); return 'context'; } };
+  assert.equal(await launchPersistentBrowser(fakePersistent, 'profile', {}, local), 'context');
+  await assert.rejects(launchPersistentBrowser(fakePersistent, 'profile', { headless: false }, local), /outside CI/);
+  assert.deepEqual(persistent, [['profile', { headless: true }]], 'a persistent context is headless by default, and refused headful outside CI');
 });
 
 test('flow-review run --headed outside CI is refused before anything runs', () => {

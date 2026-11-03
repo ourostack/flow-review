@@ -1,0 +1,198 @@
+# Constrained computer
+
+One switch that makes this computer behave like a slow old laptop, as a browser's slow-network mode does for the
+network. An app that has to run well on cheap, old Windows machines is measured on one: a run under the switch is
+slower on purpose, and its budgets are set for that.
+
+```sh
+flow-review constrain -- npm run budgets            # the whole command and everything it starts
+flow-review constrain --summary report/constrained.json -- node journeys.mjs
+flow-review run flows/*.flow.ts --constrained old-windows-laptop   # only flow-review's pages, through DevTools
+FLOW_REVIEW_CONSTRAINED=old-windows-laptop node my-harness.mjs     # any harness that calls constrainPage
+```
+
+It isn't part of the review engine: any app or harness can use it, from the command line or from code.
+
+## Where it runs: only on a machine it may slow
+
+`flow-review constrain` starts helper processes, stops and continues a process tree and, on Linux, makes a cgroup with
+`sudo`, and DevTools CPU throttling keeps a core busy for every page it slows, so both run only where nobody is
+working:
+
+- on a CI runner: `GITHUB_ACTIONS=true` or `CI=true` (GitHub's runners set both);
+- on a disposable machine that declares itself a sandbox with `FLOW_REVIEW_CONSTRAIN_SANDBOX=1`, such as a Dev Box, VM
+  or container made for the run. Set it in that machine's own environment (a Dev Box's machine-level variables, its
+  image or its customization task), never in a shell profile on a computer someone works on.
+
+Anywhere else it refuses with exit code 2 before it starts anything: no proxy, no gate, no command, no summary.
+`launchConstrained` throws the same way, checking the environment of the process that calls it, not the one it would
+give the command. `--print` starts nothing, so it works anywhere. Throttling the CPU of browser pages (`flow-review run
+--constrained`, `constrainPage`, `constrainContext`, `constrainCdp`) is refused the same way, before a browser is
+launched or a page is reached. To slow only the network of pages on your own computer, give them a CPU of 1:
+`constrainPage(page, settings, { cpu: false })`, or `FLOW_REVIEW_CONSTRAINED='{"profile":"old-windows-laptop","cpu":1}'`.
+
+## It slows the tree it starts, and loads nothing else
+
+- **Only the command's tree is slowed.** The duty cycle signals only the gate's process group and the members of the
+  tree it has seen; the Windows job and the Linux cgroup hold only the gate and what it starts. The duty cycle's own
+  beat is a thread in the constraining process that sleeps (`Atomics.wait` on macOS and Linux, `Thread.Sleep` on
+  Windows) between signals; it never spins.
+- **The calibration is a bounded loop in the constrained process.** It is a fixed number of iterations of integer
+  arithmetic on one thread, sized to take about 150 ms here, run in the gate, which is the first process of the
+  constrained tree, not in a separate load generator. The gate times it a few times before the constraint (under a
+  second of one core in all), and again under the constraint (three timings, up to three rounds when it corrects), then
+  sixteen bursts of about 10 ms with idle gaps between. It never runs on more than one thread, and it ends before the
+  command starts.
+- **Nothing it starts outlives the run.** The gate leads a process group (POSIX) or is in a job (Windows, which closes
+  the job and every process in it when the run ends) or a cgroup (Linux in CI). When the command ends, when the run
+  times out, and when the constraining process exits, the whole tree is killed: the process group, every descendant the
+  tree's watch has seen even if it left the group, the cgroup's processes, and the job's. The watch samples the tree
+  four times a second, so on macOS (and Linux without the cgroup) a process that leaves the group and whose parent ends
+  within a quarter of a second of it starting can escape; the job and the cgroup leave no such gap. If the gate loses
+  the constraining process, it kills its own process group. A harness calling `launchConstrained` that is ended by
+  `SIGINT`, `SIGTERM` or `SIGHUP` kills the tree first (continuing it if the duty cycle had it stopped), then ends as
+  the signal would have ended it, unless it handles that signal itself, as the CLI does to stop the run and report.
+- **A hard time limit.** `--timeout-minutes` (default 60; `timeoutMinutes` from code) ends the run when it is reached,
+  however far it got: the whole tree is killed, the summary has `timedOut: true` and the exit code is 5.
+- **Browser pages are throttled by Chromium itself.** DevTools' CPU throttling holds the page's main thread in a busy
+  wait for the slowed share of every moment, so a throttled page keeps about one core busy until it is closed or the
+  throttling is lifted, even when idle, which is why it runs only on a CI runner or a declared sandbox. `constrainCdp`'s
+  `close()` lifts it from every page it attached to, and so does a `constrainCdp` that fails; close a Playwright page
+  or browser throttled with `constrainPage` when you're done with it.
+
+This repository's own tests check the same for every harness here: `test/no-load-generators.test.mjs` fails on any
+spawn of `yes`, `stress` or `stress-ng`, and on any endless loop, in the engine, its tests and fixtures, the workflows,
+the action and the npm scripts. The only CPU-burning loops it allows are the calibration loops above, each named in the
+test and checked to be bounded by its iteration count.
+
+## The `old-windows-laptop` profile
+
+| Resource | Setting | Override |
+| --- | --- | --- |
+| CPU | 4× slower | `--cpu 4` |
+| Memory | 2048 MB for the whole process tree | `--memory-mb 2048` |
+| Disk | +4 ms a call, 60 MB/s | `--disk-latency-ms 4 --disk-mb-per-sec 60` |
+| Network | +150 ms round trip, 5 Mbps down, 1 Mbps up | `--net-latency-ms 150 --net-down-kbps 5000 --net-up-kbps 1000` |
+
+A few-year-old budget laptop: a dual-core mobile CPU about a quarter of a CI runner core's speed, 4 GB of RAM with half
+left for the app, a slow SATA disk and weak Wi-Fi. A CPU of 1, or a 0 anywhere else, turns that part off. The
+performance owner sets the budgets a constrained run is held to; this tool only makes the computer slow, and says how
+slow it was.
+
+## What is slowed, and how, on each platform
+
+**Enforced** means the operating system holds the process tree to the limit. **Detected** means the tool watches for
+the limit and, when the tree passes it, stops the tree and fails the run: the limit can't be exceeded unnoticed, but
+the app never feels the pressure of being near it.
+
+| | Windows | Linux in CI | Linux elsewhere, macOS |
+| --- | --- | --- | --- |
+| CPU, processes | Enforced: a suspend/resume duty cycle of a job object's processes | Enforced: a cgroup v2 `cpu.max` | Enforced: a stop/continue duty cycle |
+| CPU, browser pages | Enforced: DevTools CPU throttling | the same | the same |
+| Memory | Enforced: the job's committed-memory limit | Enforced: the cgroup's `memory.max`, with no swap | Detected: the tree's resident memory, sampled 4 times a second |
+| Disk | Node processes' `fs` calls | the same | the same |
+| Network | A local proxy for anything that honours `HTTP_PROXY`; DevTools for pages | the same | the same |
+
+**CPU.** `flow-review constrain` starts a small gate process, times a fixed loop in it, puts it under the constraint,
+times the loop again, and only then has the gate start the command, so the command and everything it starts are
+constrained from their first instruction. The two timings are the slowdown achieved; when it is more than ±25%
+(`--tolerance`) from the profile's, the command doesn't run and the exit code is 4. The measured factor is in the
+banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
+
+- Windows: every process in the job is suspended and resumed in turn, running a quarter of every 10 ms, so every
+  thread runs 4× slower, as with the duty cycle below. `--cpu-mechanism hard-cap` uses the job's hard CPU-rate cap
+  instead: a share of the whole machine, set so the tree has one core at a quarter of its speed (`10000 / (4 × logical
+  CPUs)` cycles in 10,000). A single thread runs 4× slower; work spread over several threads is slowed more, because
+  the threads share that one slowed core.
+- Linux: when `CI=true` and `sudo -n` works (as on GitHub's runners), a cgroup with `cpu.max` of a quarter of one core
+  every 10 ms (a longer period above 10×, as the kernel's quota is at least 1 ms): the same as Windows' hard cap.
+  `--cpu-mechanism hard-cap` asks for it anywhere; `duty-cycle` uses the duty cycle instead, and the cgroup, when there
+  is one, then caps memory only.
+- macOS, and Linux without the cgroup: the tree is stopped (`SIGSTOP`) and continued (`SIGCONT`) in turn, running a
+  quarter of every 10 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The cycle
+  counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
+  grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
+  measured again, up to twice (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
+  leave the tree's process group (a browser Playwright launches) are found by parent and signalled one by one, within
+  a quarter of a second of starting. If the constraining process is killed outright (`SIGKILL`), it can't clean up:
+  the tree may be left stopped, using no CPU; `kill -KILL -<pid>` ends it.
+- Browser pages: `Emulation.setCPUThrottlingRate`, as DevTools' CPU throttling. `constrainPage(page, settings,
+  { calibrate: true })` measures it too: the loop is timed in the page unthrottled and throttled in turn, five times,
+  and the factor is the median of the five pairs (each in `cpu.factors`), so a moment when the computer runs faster or
+  slower than usual isn't taken for the slowdown. A page whose processes are already in a constrained tree isn't
+  throttled again, so nothing is slowed twice. Chromium slows a page in slices: on Windows it suspends the page's main
+  thread for about 165 µs of every 210 (measured about 4.4×); on Linux and macOS a thread signals the main thread
+  every 200 µs to busy-wait three times as long as it ran, counting at most 1 ms of running. Linux wakes that thread on
+  time (4.1–4.2×). macOS often wakes it 0.3–1.5 ms late, so the pauses after a run of over 1 ms are cut short and the
+  page gets more than its share; on GitHub's macOS runners the factor measured 3.5–4.1×, and dips lower for a moment
+  when the wake-ups are late for long.
+
+The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too. On a
+heavily loaded computer, and on Apple silicon, where a process can move between performance and efficiency cores, the
+measurement is noisier; a run that misses the tolerance doesn't run its command rather than report a false factor.
+
+**Memory.** Windows caps the tree's committed memory (private bytes), so an allocation past the cap fails, as it would
+on a computer out of memory. Linux caps resident memory and page cache and kills the largest process past it. macOS
+can't cap a process tree without root, so the tool samples the tree's resident memory and stops the tree when it is
+over. Linux without the cgroup does the same: `RLIMIT_AS` would cap virtual address space, which V8 and Chromium
+reserve far beyond what they use, so it would fail healthy apps. A run over the cap exits 3 and lists `memory` in the
+summary's `capsHit`.
+
+**Disk.** A preload added to `NODE_OPTIONS` (`--import`) makes each call through Node's `fs`, `fs/promises` and
+`fs.promises` wait as a slow disk would: one disk serves the process's calls in turn, each taking the latency plus its
+bytes at the throughput. Callbacks and promises arrive that much later; synchronous calls block for it. Streams are
+slowed, as they read and write through `fs.read` and `fs.write`. Not slowed: processes that aren't Node (a browser, a
+.NET or native service), `FileHandle` methods, native addons, Electron processes that ignore `NODE_OPTIONS`, and Node's
+module loading wherever it bypasses these functions. Operating-system disk throttling needs administrator rights on
+every platform (a Linux cgroup's `io.max` is the closest), so the tool doesn't attempt it.
+
+**Network.** A local proxy is started for the run, and `HTTP_PROXY`, `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` point
+the command at it; `NO_PROXY` keeps this computer's own addresses direct, so an app's local services stay fast. Every
+byte waits half the round trip in each direction, and each direction is one shared link at the given throughput. HTTPS
+passes through `CONNECT` tunnels unread, after a round trip to connect. Only clients that honour the proxy variables
+are slowed: curl, Node's `fetch` and `http` with `NODE_USE_ENV_PROXY`, most CLIs. Browsers usually don't; their pages
+are slowed through DevTools' `Network.emulateNetworkConditions` instead (responses a test fulfils itself, with routes,
+may skip it). WebView2 can also be pointed at the proxy with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--proxy-server=<url>`
+when DevTools isn't attached. `flow-review constrain --proxy` runs the proxy alone.
+
+## Turning it on in a harness
+
+In CI, or on a Dev Box made for the run with `FLOW_REVIEW_CONSTRAIN_SANDBOX=1`, run the harness under
+`flow-review constrain`, which constrains every process it starts and hands it the settings in
+`FLOW_REVIEW_CONSTRAINED` (JSON: the profile, the settings, the proxy, and in `tree` the mechanisms and the measured
+factor). The harness then constrains its browser pages and records the run as constrained:
+
+```js
+import { constrainedFromEnv, constrainPage, constrainCdp } from '@ourostack/flow-review';
+
+const constrained = constrainedFromEnv(); // null when the switch is off
+if (constrained) {
+  await constrainPage(page, constrained); // a Playwright Chromium page: network, and CPU unless its tree is throttled
+  const webview = await constrainCdp('http://127.0.0.1:9222', constrained); // any Chromium or WebView2 on a debugging port
+  report.constrained = constrained; // so a budget result can't be mistaken for a normal run's
+}
+```
+
+`FLOW_REVIEW_CONSTRAINED=old-windows-laptop` (a profile name) turns on the page side alone, for a harness not run
+under `flow-review constrain`. From code, `launchConstrained(command, args, { profile, overrides, summary })` does what
+the command line does and returns `{ ready, done, stop }`; `startDelayProxy({ latencyMs, downKbps, upKbps })` is the
+proxy on its own.
+
+## Can't be mistaken for a normal run
+
+- A banner on stderr before the command starts and after it ends, starting `CONSTRAINED COMPUTER (old-windows-laptop)`,
+  with the measured factor and the caps hit; in GitHub Actions, a notice on the run too.
+- `FLOW_REVIEW_CONSTRAINED` in the command's environment.
+- The summary (`--summary <file>`, `flow-review schema constrained`): the profile, the settings and any overrides, the
+  achieved CPU factor and its baseline and constrained timings, each mechanism and whether it was enforced or detected,
+  peak memory, `capsHit`, the proxy's traffic, what let it run here (`sandbox`), its time limit and whether it was
+  reached (`timeoutMinutes`, `timedOut`), and how the command ended. `ok` is true only when the slowdown was within
+  tolerance, no cap was hit, the run didn't time out and the command exited 0.
+- `flow-review run` under the switch puts `provenance.constrained` in report.json and a line in summary.md.
+
+## Exit codes
+
+The command's own, or: 2 when the switch can't constrain as asked (a usage error, a host that isn't a CI runner or a
+declared sandbox, or a mechanism this computer doesn't have; it never falls back to an unconstrained run); 3 when the
+tree went over the memory cap; 4 when the measured CPU slowdown was outside the tolerance, and the command didn't run;
+5 when the run went past `--timeout-minutes` and its tree was killed.
