@@ -13,6 +13,52 @@ FLOW_REVIEW_CONSTRAINED=old-windows-laptop node my-harness.mjs     # any harness
 
 It isn't part of the review engine: any app or harness can use it, from the command line or from code.
 
+## Where it runs: only on a machine it may slow
+
+`flow-review constrain` starts helper processes, stops and continues a process tree and, on Linux, makes a cgroup with
+`sudo`, so it runs only where nobody is working:
+
+- on a CI runner: `GITHUB_ACTIONS=true` or `CI=true` (GitHub's runners set both);
+- on a disposable machine that declares itself a sandbox with `FLOW_REVIEW_CONSTRAIN_SANDBOX=1`, such as a Dev Box, VM
+  or container made for the run. Set it in that machine's own environment (a Dev Box's machine-level variables, its
+  image or its customization task), never in a shell profile on a computer someone works on.
+
+Anywhere else it refuses with exit code 2 before it starts anything: no proxy, no gate, no command, no summary.
+`launchConstrained` throws the same way, checking the environment of the process that calls it, not the one it would
+give the command. `--print` starts nothing, so it works anywhere. To slow only browser pages on your own computer, use
+`flow-review run --constrained` or `constrainPage`, which change nothing outside the browser.
+
+## It slows the tree it starts, and loads nothing else
+
+- **Only the command's tree is slowed.** The duty cycle signals only the gate's process group and the members of the
+  tree it has seen; the Windows job and the Linux cgroup hold only the gate and what it starts. The duty cycle's own
+  beat is a thread in the constraining process that sleeps (`Atomics.wait` on macOS and Linux, `Thread.Sleep` on
+  Windows) between signals; it never spins.
+- **The calibration is a bounded loop in the constrained process.** It is a fixed number of iterations of integer
+  arithmetic on one thread, sized to take about 150 ms here, run in the gate, which is the first process of the
+  constrained tree, not in a separate load generator. The gate times it a few times before the constraint (under a
+  second of one core in all), and again under the constraint (three timings, up to three rounds when it corrects), then
+  sixteen bursts of about 10 ms with idle gaps between. It never runs on more than one thread, and it ends before the
+  command starts.
+- **Nothing it starts outlives the run.** The gate leads a process group (POSIX) or is in a job (Windows, which closes
+  the job and every process in it when the run ends) or a cgroup (Linux in CI). When the command ends, when the run
+  times out, and when the constraining process exits, the whole tree is killed: the process group, every descendant the
+  tree's watch has seen even if it left the group, the cgroup's processes, and the job's. The watch samples the tree
+  four times a second, so on macOS (and Linux without the cgroup) a process that leaves the group and whose parent ends
+  within a quarter of a second of it starting can escape; the job and the cgroup leave no such gap. If the gate loses
+  the constraining process, it kills its own process group.
+- **A hard time limit.** `--timeout-minutes` (default 60; `timeoutMinutes` from code) ends the run when it is reached,
+  however far it got: the whole tree is killed, the summary has `timedOut: true` and the exit code is 5.
+- **Browser pages are throttled by Chromium itself.** DevTools' CPU throttling holds the page's main thread in a busy
+  wait for the slowed share of every moment, so a throttled page keeps about one core busy until it is closed or the
+  throttling is lifted, even when idle. `constrainCdp`'s `close()` lifts it from every page it throttled; close a
+  Playwright page or browser throttled with `constrainPage` when you're done with it.
+
+This repository's own tests check the same for every harness here: `test/no-load-generators.test.mjs` fails on any
+spawn of `yes`, `stress` or `stress-ng`, and on any endless loop, in the engine, its tests and fixtures, the workflows,
+the action and the npm scripts. The only CPU-burning loops it allows are the calibration loops above, each named in the
+test and checked to be bounded by its iteration count.
+
 ## The `old-windows-laptop` profile
 
 | Resource | Setting | Override |
@@ -53,13 +99,13 @@ banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
 - Linux: when `CI=true` and `sudo -n` works (as on GitHub's runners), a cgroup with `cpu.max` of a quarter of one core:
   the same as Windows. `--cpu-mechanism cgroup` asks for it anywhere; `duty-cycle` refuses it.
 - macOS, and Linux without the cgroup: the tree is stopped (`SIGSTOP`) and continued (`SIGCONT`) in turn, running a
-  quarter of every 50 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The cycle
+  quarter of every 10 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The cycle
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
   grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
   measured again, up to twice (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
   leave the tree's process group (a browser Playwright launches) are found by parent and signalled one by one, within
-  a quarter of a second of starting. If the constraining process is killed outright, the tree may be left stopped;
-  `kill -CONT -<pid>` frees it.
+  a quarter of a second of starting. If the constraining process is killed outright (`SIGKILL`), it can't clean up:
+  the tree may be left stopped, using no CPU; `kill -KILL -<pid>` ends it.
 - Browser pages: `Emulation.setCPUThrottlingRate`, as DevTools' CPU throttling. `constrainPage(page, settings,
   { calibrate: true })` measures it too. A page whose processes are already in a constrained tree isn't throttled
   again, so nothing is slowed twice.
@@ -94,7 +140,8 @@ when DevTools isn't attached. `flow-review constrain --proxy` runs the proxy alo
 
 ## Turning it on in a harness
 
-Run the harness under `flow-review constrain`, which constrains every process it starts and hands it the settings in
+In CI, or on a Dev Box made for the run with `FLOW_REVIEW_CONSTRAIN_SANDBOX=1`, run the harness under
+`flow-review constrain`, which constrains every process it starts and hands it the settings in
 `FLOW_REVIEW_CONSTRAINED` (JSON: the profile, the settings, the proxy, and in `tree` the mechanisms and the measured
 factor). The harness then constrains its browser pages and records the run as constrained:
 
@@ -121,12 +168,14 @@ proxy on its own.
 - `FLOW_REVIEW_CONSTRAINED` in the command's environment.
 - The summary (`--summary <file>`, `flow-review schema constrained`): the profile, the settings and any overrides, the
   achieved CPU factor and its baseline and constrained timings, each mechanism and whether it was enforced or detected,
-  peak memory, `capsHit`, the proxy's traffic, and how the command ended. `ok` is true only when the slowdown was
-  within tolerance, no cap was hit and the command exited 0.
+  peak memory, `capsHit`, the proxy's traffic, what let it run here (`sandbox`), its time limit and whether it was
+  reached (`timeoutMinutes`, `timedOut`), and how the command ended. `ok` is true only when the slowdown was within
+  tolerance, no cap was hit, the run didn't time out and the command exited 0.
 - `flow-review run` under the switch puts `provenance.constrained` in report.json and a line in summary.md.
 
 ## Exit codes
 
-The command's own, or: 2 when the switch can't constrain as asked (a usage error, or a mechanism this computer doesn't
-have; it never falls back to an unconstrained run); 3 when the tree went over the memory cap; 4 when the measured CPU
-slowdown was outside the tolerance, and the command didn't run.
+The command's own, or: 2 when the switch can't constrain as asked (a usage error, a host that isn't a CI runner or a
+declared sandbox, or a mechanism this computer doesn't have; it never falls back to an unconstrained run); 3 when the
+tree went over the memory cap; 4 when the measured CPU slowdown was outside the tolerance, and the command didn't run;
+5 when the run went past `--timeout-minutes` and its tree was killed.

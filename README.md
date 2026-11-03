@@ -312,8 +312,11 @@ when it is off by more than 25%, prints a banner before and after, and writes a 
 schema constrained`) with the factor, which limits were enforced or only detected, and which were hit. Windows uses a
 job object, Linux in CI a cgroup, macOS a stop/continue duty cycle and a memory watch. Browser pages are slowed through
 DevTools: `flow-review run --constrained old-windows-laptop`, or `constrainPage` and `constrainCdp` (WebView2 too) in
-any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the review engine. See
-[Constrained computer](docs/constrained-computer.md) for each resource on each platform, and what isn't slowed.
+any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the review engine. It runs only on a CI
+runner or on a disposable machine that sets `FLOW_REVIEW_CONSTRAIN_SANDBOX=1` (a Dev Box made for the run), refusing
+anywhere else before it starts anything, and kills everything it started when the run ends or passes
+`--timeout-minutes`. See [Constrained computer](docs/constrained-computer.md) for each resource on each platform, what
+isn't slowed, and why it loads nothing but the tree it slows.
 
 ## Develop
 
@@ -321,7 +324,7 @@ any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the 
 npm ci && npx playwright install --only-shell chromium && npm test
 ```
 
-The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers. The constrained-computer tests (`npm run test:constrain`, last in `npm test`) measure speed, so they run on their own, one at a time; CI runs them on Windows, macOS and Linux.
+The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers. The constrained-computer tests (`npm run test:constrain`, last in `npm test`) measure speed, so they run on their own, one at a time, and only where `flow-review constrain` may run (CI, or a declared sandbox; elsewhere they are skipped); CI runs them on Windows, macOS and Linux. `test/no-load-generators.test.mjs` fails any harness here that spawns `yes`, `stress` or `stress-ng`, or loops without end.
 
 ## Not in v0 yet
 

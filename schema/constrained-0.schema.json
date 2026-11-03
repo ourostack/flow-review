@@ -73,6 +73,9 @@
     "exitCode": { "type": ["integer", "null"] },
     "signal": { "type": ["string", "null"] },
     "error": { "type": ["string", "null"] },
+    "sandbox": { "type": "string", "description": "What let the run constrain this host: GITHUB_ACTIONS=true, CI=true or FLOW_REVIEW_CONSTRAIN_SANDBOX=1." },
+    "timeoutMinutes": { "type": "number", "exclusiveMinimum": 0, "description": "The run's time limit, after which its whole process tree is killed." },
+    "timedOut": { "type": "boolean", "description": "The run went past timeoutMinutes and its whole process tree was killed." },
     "ok": { "type": "boolean" }
   }
 }

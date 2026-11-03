@@ -287,6 +287,7 @@ export declare function headfulReasons(options?: LaunchOptions, env?: Record<str
 export declare function assertHeadless<T extends LaunchOptions>(options?: T, env?: Record<string, string | undefined>): T & { headless: boolean };
 /** Launches a browser type (Playwright's chromium, say) headless, or headful only where CI=true. */
 export declare function launchBrowser<B>(browserType: { launch(options: LaunchOptions): Promise<B> }, options?: LaunchOptions, env?: Record<string, string | undefined>): Promise<B>;
+export declare function launchPersistentBrowser<C>(browserType: { launchPersistentContext(userDataDir: string, options: LaunchOptions): Promise<C> }, userDataDir: string, options?: LaunchOptions, env?: Record<string, string | undefined>): Promise<C>;
 
 // ---- Capability parity (schema/parity-0.schema.json, schema/parity-report-0.schema.json)
 
@@ -432,9 +433,14 @@ export interface ConstrainedSummary {
   exitCode: number | null;
   signal: string | null;
   error: string | null;
+  /** What let it run here: GITHUB_ACTIONS=true, CI=true or FLOW_REVIEW_CONSTRAIN_SANDBOX=1. */
+  sandbox?: string;
+  timeoutMinutes?: number;
+  /** The run went past its time limit and its whole tree was killed. */
+  timedOut?: boolean;
   ok: boolean;
 }
-export interface CdpConstraintResult { cpu: { rate: number | null; skipped: string | null; achieved: number | null; baselineMs?: number; constrainedMs?: number }; network: { latencyMs: number; downKbps: number; upKbps: number } | null }
+export interface CdpConstraintResult { cpu: { rate: number | null; skipped: string | null; achieved: number | null; baselineMs?: number; constrainedMs?: number; iterations?: number }; network: { latencyMs: number; downKbps: number; upKbps: number } | null }
 export interface CdpOptions { cpu?: boolean; network?: boolean; calibrate?: boolean; calibrateMs?: number }
 
 export declare const PROFILES: Readonly<Record<string, Readonly<Omit<ConstrainedSettings, "profile" | "overridden" | "tree" | "proxy">>>>;
@@ -445,6 +451,11 @@ export declare function resolveSettings(profile?: string, overrides?: Constraine
 export declare function constrainedFromEnv(env?: Record<string, string | undefined>): ConstrainedSettings | null;
 export declare function bannerLine(settings: ConstrainedSettings, extra?: { cpu?: { achieved?: number | null; mechanism?: string | null } | null; memory?: { enforcement?: string | null } | null }): string;
 export declare function pickMechanisms(settings: ConstrainedSettings, opts?: { cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; platform?: string; env?: Record<string, string | undefined>; cgroup?: () => boolean }): { cpu: CpuMechanism | null; memory: MemoryMechanism | null };
+export declare const SANDBOX_ENV: "FLOW_REVIEW_CONSTRAIN_SANDBOX";
+/** What makes this host one flow-review constrain may run on (a CI runner, or a declared disposable sandbox), or null. */
+export declare function sandboxedHost(env?: Record<string, string | undefined>): string | null;
+/** Throws, naming how to allow it, unless this host is a CI runner or a declared disposable sandbox. */
+export declare function assertSandboxedHost(env?: Record<string, string | undefined>): string;
 export declare function constrainedEnv(env: Record<string, string | undefined>, info: ConstrainedSettings, proxyUrl?: string | null): Record<string, string>;
 export interface ConstrainedRun {
   /** Resolves once the slowdown is measured and the command has started. */
@@ -453,12 +464,12 @@ export interface ConstrainedRun {
   done: Promise<ConstrainedSummary>;
   stop(signal?: string): void;
 }
-export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null }
+export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null; timeoutMinutes?: number }
 export declare function launchConstrained(command: string, args?: string[], options?: ConstrainOptions): ConstrainedRun;
 export declare function runConstrainedCommand(command: string, args?: string[], options?: ConstrainOptions): Promise<ConstrainedSummary>;
 export declare function constrainPage(page: import("playwright").Page, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<CdpConstraintResult | null>;
 export declare function constrainContext(context: import("playwright").BrowserContext, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: CdpConstraintResult[] } | null>;
-export declare function constrainCdp(endpoint: string, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: (CdpConstraintResult & { targetId: string; url: string })[]; close(): void } | null>;
+export declare function constrainCdp(endpoint: string, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: (CdpConstraintResult & { targetId: string; url: string })[]; close(): Promise<void> } | null>;
 export declare function applyCdpConstraints(send: (method: string, params?: object) => Promise<any>, settings: ConstrainedSettings, options?: CdpOptions): Promise<CdpConstraintResult>;
 export declare function startDelayProxy(opts?: { latencyMs?: number; downKbps?: number; upKbps?: number; port?: number; host?: string }): Promise<{ url: string; port: number; stats(): { requests: number; tunnels: number; failed: number; bytesUp: number; bytesDown: number }; close(): Promise<void> }>;
 export declare function spin(iterations: number): number;

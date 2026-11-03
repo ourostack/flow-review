@@ -1,8 +1,9 @@
 // Constrained computer: the profile, the slow-network proxy, the slow-disk preload, the DevTools throttling of pages,
 // and the CLI end to end on this platform: the CPU slowdown it measures, a grandchild slowed as much, the memory cap
-// enforced or detected, and a run's report marked as constrained. These tests measure speed, so they run on their own
-// (npm run test:constrain), never alongside the other test files.
-import test from 'node:test';
+// enforced or detected, a run's report marked as constrained, and nothing left running after a run ends or times out.
+// These tests measure speed, so they run on their own (npm run test:constrain), never alongside the other test files,
+// and only where flow-review constrain may run: on a CI runner or a declared sandbox. Anywhere else they are skipped.
+import nodeTest from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -12,14 +13,16 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { resolveSettings, constrainedFromEnv, bannerLine, PROFILES, CONSTRAINED_ENV } from '../../lib/constrain-profile.mjs';
-import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv } from '../../lib/constrain.mjs';
+import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv, sandboxedHost } from '../../lib/constrain.mjs';
 import { startDelayProxy } from '../../lib/constrain-proxy.mjs';
 import { constrainPage, constrainCdp } from '../../lib/constrain-cdp.mjs';
 import { baseline, within } from '../../lib/constrain-calibrate.mjs';
-import { assertHeadless } from '../../lib/browser.mjs';
+import { launchPersistentBrowser } from '../../lib/browser.mjs';
 import { validate } from '../../lib/schema.mjs';
 import { launch, close } from '../helpers.mjs';
 
+const notSandboxed = !sandboxedHost() && 'flow-review constrain runs only on a CI runner or a declared sandbox (FLOW_REVIEW_CONSTRAIN_SANDBOX=1)';
+const test = (name, options, fn) => (typeof options === 'function' ? nodeTest(name, { skip: notSandboxed }, options) : nodeTest(name, { ...options, skip: options.skip || notSandboxed }, fn));
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const scratch = path.join(root, '.scratch', 'constrain');
 const fixture = (f) => path.join(root, 'test', 'fixtures', 'constrain', f);
@@ -150,24 +153,30 @@ test('pages: DevTools throttles CPU about 4× and slows the network', async (t) 
   const settings = resolveSettings('old-windows-laptop', { network: { latencyMs: 300, downKbps: 0, upKbps: 0 } });
   const fetchMs = (page) => page.evaluate(async (u) => { const t0 = performance.now(); await (await fetch(u, { cache: 'no-store' })).text(); return performance.now() - t0; }, url);
   try {
+    // Each part closes its browser before the next starts. Chromium slows a page by holding its main thread in a busy
+    // wait for the slowed share of every moment, so a throttled page left open keeps a core busy, idle or not: on a
+    // three-core runner it starves the next page's throttling and halves the slowdown measured there.
     await t.test('a Playwright page', async () => {
-      const b = await launch();
-      const page = await b.newPage();
-      await page.goto(url);
-      const r = await constrainPage(page, settings, { calibrate: true });
-      assert.equal(r.cpu.rate, 4);
-      assert.ok(within(r.cpu.achieved, 4, 0.25), `the page measured ${r.cpu.achieved}×`);
-      const ms = await fetchMs(page);
-      assert.ok(ms >= 290, `a fetch took ${ms.toFixed(0)} ms under 300 ms of latency`);
-      const inTree = await constrainPage(await b.newPage(), { ...settings, tree: { cpu: 'duty-cycle' } });
-      assert.equal(inTree.cpu.rate, null, 'a page in a throttled tree is not slowed twice');
-      assert.match(inTree.cpu.skipped, /constrained process tree/);
-      assert.equal(await constrainPage(page, null), null, 'off when constrained mode is off');
+      try {
+        const b = await launch();
+        const page = await b.newPage();
+        await page.goto(url);
+        const r = await constrainPage(page, settings, { calibrate: true });
+        console.log(`a Playwright page: ${r.cpu.achieved}× (${r.cpu.baselineMs} ms -> ${r.cpu.constrainedMs} ms)`);
+        assert.equal(r.cpu.rate, 4);
+        assert.ok(within(r.cpu.achieved, 4, 0.25), `the page measured ${r.cpu.achieved}×`);
+        const ms = await fetchMs(page);
+        assert.ok(ms >= 290, `a fetch took ${ms.toFixed(0)} ms under 300 ms of latency`);
+        const inTree = await constrainPage(await b.newPage(), { ...settings, tree: { cpu: 'duty-cycle' } });
+        assert.equal(inTree.cpu.rate, null, 'a page in a throttled tree is not slowed twice');
+        assert.match(inTree.cpu.skipped, /constrained process tree/);
+        assert.equal(await constrainPage(page, null), null, 'off when constrained mode is off');
+      } finally { await close(); }
     });
     await t.test('any Chromium on its remote-debugging port, as WebView2 is reached', async () => {
       const dir = path.join(scratch, 'profile');
       fs.rmSync(dir, { recursive: true, force: true });
-      const ctx = await chromium.launchPersistentContext(dir, assertHeadless({ executablePath: process.env.FLOW_REVIEW_CHROMIUM || undefined, args: ['--remote-debugging-port=0'] }));
+      const ctx = await launchPersistentBrowser(chromium, dir, { executablePath: process.env.FLOW_REVIEW_CHROMIUM || undefined, args: ['--remote-debugging-port=0'] });
       try {
         const page = ctx.pages()[0] ?? (await ctx.newPage());
         await page.goto(url);
@@ -181,10 +190,15 @@ test('pages: DevTools throttles CPU about 4× and slows the network', async (t) 
           assert.ok(handle.applied.length >= 1);
           const r = handle.applied.find((a) => a.url.startsWith(url));
           assert.ok(r, `the page at ${url} was constrained: ${JSON.stringify(handle.applied.map((a) => a.url))}`);
+          console.log(`a page on its debugging port: ${r.cpu.achieved}× (${r.cpu.baselineMs} ms -> ${r.cpu.constrainedMs} ms)`);
           assert.ok(within(r.cpu.achieved, 4, 0.25), `the page measured ${r.cpu.achieved}×`);
           const ms = await fetchMs(page);
           assert.ok(ms >= 290, `a fetch took ${ms.toFixed(0)} ms under 300 ms of latency`);
-        } finally { handle.close(); }
+        } finally { await handle.close(); }
+        // Closing lifts the throttling: the same loop runs at full speed again.
+        const lifted = handle.applied.find((a) => a.url.startsWith(url)).cpu;
+        const after = await page.evaluate((n) => { const ms = [0, 1, 2].map(() => { const t = performance.now(); globalThis.__flowReviewSpin(n); return performance.now() - t; }); return ms.sort((a, b) => a - b)[1]; }, lifted.iterations);
+        assert.ok(after < lifted.constrainedMs / 2, `after close the loop took ${after.toFixed(0)} ms, ${lifted.constrainedMs} ms throttled and ${lifted.baselineMs} ms before`);
       } finally { await ctx.close(); }
     });
   } finally {
@@ -289,4 +303,54 @@ test('flow-review run --constrained slows its pages and marks the report', { tim
   const normal = await run(['run', 'test/fixtures/constrain/flows/*.flow.json', '--fail-on', 'none', '--out', `${out}-normal`]);
   assert.equal(JSON.parse(fs.readFileSync(path.join(`${out}-normal`, 'report.json'), 'utf8')).provenance.constrained, null);
   assert.equal(normal.status, 0);
+});
+
+// Nothing a constrained run starts outlives it: a process left in the command's group and one that left the group are
+// both gone once the run has ended, whether the command exited or the run timed out.
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+const gone = async (pid, ms = 10_000) => {
+  for (const end = Date.now() + ms; Date.now() < end;) {
+    if (!alive(pid)) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return !alive(pid);
+};
+const leftRunning = async (pidsFile) => {
+  const pids = JSON.parse(fs.readFileSync(pidsFile, 'utf8'));
+  const left = [];
+  for (const [name, pid] of Object.entries(pids)) if (!(await gone(pid))) left.push(`${name} ${pid}`);
+  for (const pid of Object.values(pids)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone, as it should be */ } }
+  return left;
+};
+
+test('flow-review constrain kills what the command left running when it exits', { timeout: 120_000 }, async () => {
+  const pidsFile = path.join(scratch, 'left-exit.json');
+  const summaryFile = path.join(scratch, 'left-exit-summary.json');
+  fs.rmSync(pidsFile, { force: true });
+  const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
+  assert.equal(r.status, 0, r.stderr);
+  const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+  assert.deepEqual(validate('constrained', summary), []);
+  assert.equal(summary.timedOut, false);
+  assert.match(summary.sandbox, /^(GITHUB_ACTIONS=true|CI=true|FLOW_REVIEW_CONSTRAIN_SANDBOX=1)$/);
+  assert.deepEqual(await leftRunning(pidsFile), [], 'nothing the command started is still running');
+});
+
+test('flow-review constrain kills the whole tree when the run times out', { timeout: 120_000 }, async () => {
+  const pidsFile = path.join(scratch, 'left-timeout.json');
+  const summaryFile = path.join(scratch, 'left-timeout-summary.json');
+  fs.rmSync(pidsFile, { force: true });
+  const t0 = performance.now();
+  const r = await run(['constrain', '--cpu', '1', '--timeout-minutes', '0.2', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'stay']);
+  const s = (performance.now() - t0) / 1000;
+  assert.equal(r.status, 5, `a run past its limit exits 5:\n${r.stderr}`);
+  assert.ok(s < 60, `the run ended ${s.toFixed(0)} s after it started, with a 12 s limit`);
+  assert.match(r.stderr, /went past its 0\.2-minute limit \(--timeout-minutes\): its whole process tree was killed/);
+  const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+  assert.deepEqual(validate('constrained', summary), []);
+  assert.equal(summary.timedOut, true);
+  assert.equal(summary.timeoutMinutes, 0.2);
+  assert.equal(summary.ok, false);
+  assert.ok(fs.existsSync(pidsFile), 'the command had started');
+  assert.deepEqual(await leftRunning(pidsFile), [], 'the command and everything it started are gone');
 });
