@@ -440,7 +440,7 @@ export interface ConstrainedSummary {
   timedOut?: boolean;
   ok: boolean;
 }
-export interface CdpConstraintResult { cpu: { rate: number | null; skipped: string | null; achieved: number | null; baselineMs?: number; constrainedMs?: number; iterations?: number }; network: { latencyMs: number; downKbps: number; upKbps: number } | null }
+export interface CdpConstraintResult { cpu: { rate: number | null; skipped: string | null; achieved: number | null; factors?: number[]; baselineMs?: number; constrainedMs?: number; iterations?: number }; network: { latencyMs: number; downKbps: number; upKbps: number } | null }
 export interface CdpOptions { cpu?: boolean; network?: boolean; calibrate?: boolean; calibrateMs?: number }
 
 export declare const PROFILES: Readonly<Record<string, Readonly<Omit<ConstrainedSettings, "profile" | "overridden" | "tree" | "proxy">>>>;

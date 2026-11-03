@@ -162,7 +162,7 @@ test('pages: DevTools throttles CPU about 4× and slows the network', async (t) 
         const page = await b.newPage();
         await page.goto(url);
         const r = await constrainPage(page, settings, { calibrate: true });
-        console.log(`a Playwright page: ${r.cpu.achieved}× (${r.cpu.baselineMs} ms -> ${r.cpu.constrainedMs} ms)`);
+        console.log(`a Playwright page: ${r.cpu.achieved}× (${r.cpu.baselineMs} ms -> ${r.cpu.constrainedMs} ms; pairs ${r.cpu.factors.join(', ')})`);
         assert.equal(r.cpu.rate, 4);
         assert.ok(within(r.cpu.achieved, 4, 0.25), `the page measured ${r.cpu.achieved}×`);
         const ms = await fetchMs(page);
@@ -190,7 +190,7 @@ test('pages: DevTools throttles CPU about 4× and slows the network', async (t) 
           assert.ok(handle.applied.length >= 1);
           const r = handle.applied.find((a) => a.url.startsWith(url));
           assert.ok(r, `the page at ${url} was constrained: ${JSON.stringify(handle.applied.map((a) => a.url))}`);
-          console.log(`a page on its debugging port: ${r.cpu.achieved}× (${r.cpu.baselineMs} ms -> ${r.cpu.constrainedMs} ms)`);
+          console.log(`a page on its debugging port: ${r.cpu.achieved}× (${r.cpu.baselineMs} ms -> ${r.cpu.constrainedMs} ms; pairs ${r.cpu.factors.join(', ')})`);
           assert.ok(within(r.cpu.achieved, 4, 0.25), `the page measured ${r.cpu.achieved}×`);
           const ms = await fetchMs(page);
           assert.ok(ms >= 290, `a fetch took ${ms.toFixed(0)} ms under 300 ms of latency`);
@@ -212,8 +212,11 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
   const summaryFile = path.join(scratch, 'tree.json');
   try {
     const { iterations } = baseline(150);
-    const plain = spawnSync(process.execPath, [fixture('tree.mjs'), String(iterations)], { encoding: 'utf8', env: { ...process.env, [CONSTRAINED_ENV]: '' } });
-    const base = JSON.parse(plain.stdout.split('TREE ')[1].split('\n')[0]);
+    // The grandchild's unconstrained time: the median of three plain runs, one before the constrained run and two after,
+    // so a moment when this computer runs fast or slow (a virtual Apple silicon runner's cores change speed under it)
+    // isn't taken for the baseline.
+    const plainGrandchildMs = () => JSON.parse(spawnSync(process.execPath, [fixture('tree.mjs'), String(iterations)], { encoding: 'utf8', env: { ...process.env, [CONSTRAINED_ENV]: '' } }).stdout.split('TREE ')[1].split('\n')[0]).grandchildMs;
+    const plain = [plainGrandchildMs()];
     const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stderr, /CONSTRAINED COMPUTER \(old-windows-laptop\): CPU 4× slower \(measured [\d.]+×, 10 ms tasks [\d.]+×, (job-duty-cycle|cgroup-cpu-max|duty-cycle)\)/, 'a banner before');
@@ -228,8 +231,10 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.equal(summary.ok, true);
     assert.deepEqual(summary.capsHit, []);
     const tree = JSON.parse(r.stdout.split('TREE ')[1].split('\n')[0]);
-    const ratio = tree.grandchildMs / base.grandchildMs;
-    console.log(`a grandchild ran the loop in ${tree.grandchildMs.toFixed(0)} ms, ${base.grandchildMs.toFixed(0)} ms unconstrained: ${ratio.toFixed(2)}×`);
+    plain.push(plainGrandchildMs(), plainGrandchildMs());
+    const baseMs = [...plain].sort((a, b) => a - b)[1];
+    const ratio = tree.grandchildMs / baseMs;
+    console.log(`a grandchild ran the loop in ${tree.grandchildMs.toFixed(0)} ms, ${baseMs.toFixed(0)} ms unconstrained (${plain.map((ms) => ms.toFixed(0)).join(', ')}): ${ratio.toFixed(2)}×`);
     assert.ok(ratio >= 2.8 && ratio <= 5.5, `a grandchild ran ${ratio.toFixed(2)}× slower, not about 4×`);
     assert.equal(tree.env.profile, 'old-windows-laptop');
     assert.equal(tree.env.tree.achieved, summary.cpu.achieved, 'the harness learns the measured factor');
