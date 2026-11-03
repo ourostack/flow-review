@@ -287,3 +287,109 @@ export declare function headfulReasons(options?: LaunchOptions, env?: Record<str
 export declare function assertHeadless<T extends LaunchOptions>(options?: T, env?: Record<string, string | undefined>): T & { headless: boolean };
 /** Launches a browser type (Playwright's chromium, say) headless, or headful only where CI=true. */
 export declare function launchBrowser<B>(browserType: { launch(options: LaunchOptions): Promise<B> }, options?: LaunchOptions, env?: Record<string, string | undefined>): Promise<B>;
+
+// ---- Capability parity (schema/parity-0.schema.json, schema/parity-report-0.schema.json)
+
+/** One test on a record; every key given must hold. */
+export interface ParityCondition {
+  path?: string;
+  exists?: boolean;
+  eq?: unknown;
+  ne?: unknown;
+  in?: unknown[];
+  notIn?: unknown[];
+  gte?: number;
+  lte?: number;
+  match?: string;
+  flags?: string;
+  minItems?: number;
+  some?: ParityCondition[];
+  deep?: ParityCondition[];
+  anyOf?: (ParityCondition | ParityCondition[])[];
+  not?: ParityCondition | ParityCondition[];
+}
+export interface ParityStep { click?: string; hover?: string; focus?: string; press?: string; waitFor?: string; waitMs?: number; timeoutMs?: number; optional?: boolean }
+export interface ParityExpect { selector: string; min?: number; max?: number; attr?: Record<string, string | true | null>; textNot?: string[]; visible?: boolean; timeoutMs?: number }
+export type ParityFloor =
+  | { id: string; title?: string; data: { where: ParityCondition[]; min?: number } }
+  | { id: string; title?: string; act?: ParityStep[]; expect: ParityExpect };
+export interface ParityCapability {
+  id: string;
+  title: string;
+  owner?: string;
+  intent?: string;
+  detect: { records: string; scope?: ParityCondition[]; requires?: string[]; where?: ParityCondition[]; key?: string };
+  open?: { with?: string; args?: Record<string, string> };
+  samples?: number;
+  floor: ParityFloor[];
+}
+export interface ParitySpec {
+  $schema?: string;
+  version: number;
+  name: string;
+  title?: string;
+  samples?: number;
+  surfaces: { id: string; title: string; owner?: string; capabilities: ParityCapability[] }[];
+}
+export type ParityStatus = "pass" | "gap" | "unread" | "not-present";
+export interface GuardCounts { allowed: number; blocked: number; blockedByMethod: Record<string, number>; blockedRemote: number; blockedLocal: number; sockets: { allowed: number; blocked: number }; escaped: number }
+export interface ParityResult {
+  surface: string;
+  capability: string;
+  title?: string;
+  owner: string | null;
+  status: ParityStatus;
+  scoped: number;
+  detected: number;
+  checked: number;
+  passed: number;
+  unread?: string[];
+  floors: { id: string; kind: "data" | "hook"; pass: number; fail: number; ratio?: number; min?: number; reasons?: Record<string, number> }[];
+  samples: string[];
+  ms: number;
+}
+export interface ParityReport {
+  schema: "flow-review-parity-report-0";
+  tool: { name: string; version: string };
+  spec: { name: string; version: number; sha256: string };
+  target: unknown;
+  startedAt: string;
+  finishedAt: string;
+  ms: number;
+  guard: GuardCounts | null;
+  only: string[] | null;
+  summary: Record<ParityStatus, number>;
+  results: ParityResult[];
+}
+export interface ParityIssue { key: string; surface: string; capability: string; status: "gap" | "unread"; owner: string | null; title: string; body: string }
+export type RequestAsk = { url: string; method: string; resourceType: string };
+
+export declare const PARITY_STATUSES: readonly ParityStatus[];
+export declare function valueAt(record: unknown, path: string): unknown;
+export declare function meets(record: unknown, condition: ParityCondition): boolean;
+export declare function hashKey(key: unknown, salt?: string): string;
+export declare function detect(detector: ParityCapability["detect"], records: unknown[]): { scoped: number; found: unknown[]; unread: string[] };
+export declare function pickSamples<R>(found: R[], opts?: { key?: string; n?: number; salt?: string }): { r: R; h: string }[];
+export declare function readOnlyLoopback(ask: { url: string; method: string }): boolean;
+export declare function guardContext(context: import("playwright").BrowserContext, opts?: { allow?: (ask: RequestAsk) => boolean }): Promise<GuardCounts>;
+export declare function launchGuarded(opts?: { url?: string | null; allow?: (ask: RequestAsk) => boolean; viewport?: { width: number; height: number }; launch?: LaunchOptions; waitUntil?: "load" | "domcontentloaded" | "networkidle" | "commit"; timeoutMs?: number }): Promise<{ browser: import("playwright").Browser; context: import("playwright").BrowserContext; page: PageLike; guard: GuardCounts; close: () => Promise<void> }>;
+export declare function fill(text: string, args?: Record<string, unknown>): string;
+export declare function expectHook(page: PageLike, expect: ParityExpect, args?: Record<string, unknown>, waitMs?: number): Promise<string | null>;
+export declare function validateParitySpec(spec: unknown): string[];
+export declare function runParity(opts: {
+  spec: ParitySpec;
+  records: (name: string) => unknown[] | Promise<unknown[]>;
+  page?: PageLike | null;
+  open?: ((page: PageLike, opener: string, args: Record<string, unknown>) => Promise<void>) | null;
+  samples?: number;
+  salt?: string;
+  guard?: GuardCounts | null;
+  target?: unknown;
+  waitMs?: number;
+  only?: string[] | null;
+  log?: (line: string) => void;
+}): Promise<ParityReport>;
+export declare function parityTable(report: ParityReport): string;
+export declare function parityIssues(report: ParityReport, spec?: ParitySpec | null): ParityIssue[];
+export declare function parityBaseline(report: ParityReport): Record<string, ParityStatus>;
+export declare function parityCompare(report: ParityReport, baseline: Record<string, ParityStatus>): { regressions: { id: string; was: string; now: string }[]; improvements: { id: string; was: string; now: string }[] };

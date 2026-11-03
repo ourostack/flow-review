@@ -262,7 +262,46 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.3.5`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.4.0`).
+
+## Capability parity
+
+A flow checks how a screen behaves; a **parity spec** checks whether a product has the capabilities and interaction models a floor asks for, on the data its person really has. It compares capability, not pixels: a floor is the least a familiar product does (keep its interaction model; doing better is the point), checked through stable hooks (ARIA, `data-*` attributes), never through screenshots.
+
+A spec (`flow-review schema parity`) lists surfaces and their capabilities. Each capability has:
+
+- a **detector** over records the product already reads: `records` names which, `scope` the ones it could apply to, `requires` the fields it needs (when no scoped record carries them, the product doesn't read them yet, and the capability is `unread`), and `where` the ones that call for it. Conditions take a dotted `path` and `eq`, `ne`, `in`, `notIn`, `gte`, `lte`, `match`, `exists`, `minItems`, `some` (an array item), `deep` (any object underneath), `anyOf` and `not`;
+- a **floor**: data floors (`data: { where, min }`, the share of detected records that must meet `where`) and hook floors (`expect: { selector, min, max, attr, textNot, visible }`: at least `min` matches, at most `max`, each with `attr` and no text exactly in `textNot`, and with `visible` at least `min` of them on screen, after optional `act` steps: `click`, `hover`, `focus`, `press`, `waitFor`, each `optional` if it may not apply), checked with a few detected records open (`samples`, default 3, the same ones every run: the first by salted hash);
+- `open: { with, args }`: which of the product's openers shows a record, and the record paths it takes (`${arg}` in selectors is filled from them);
+- `owner` and `intent`: who a gap goes to, and the floor in words.
+
+```json
+{
+  "version": 1, "name": "chat-floor",
+  "surfaces": [{ "id": "quotes", "title": "Quoted replies", "capabilities": [{
+    "id": "quote-shown", "title": "A reply shows what it quotes", "owner": "team:chat",
+    "intent": "A quoted reply shows the quoted author and a preview above the reply.",
+    "detect": { "records": "messages", "where": [{ "path": "body", "deep": [{ "path": "type", "eq": "reply" }] }] },
+    "open": { "with": "message", "args": { "chat": "chatId", "message": "id" } },
+    "floor": [{ "id": "quote-hook", "expect": { "selector": "[data-message-id=\"${message}\"] [data-quote]" } }]
+  }] }]
+}
+```
+
+Each capability ends `pass`, `gap`, `unread` or `not-present` (nothing in the data calls for it). Run one through an adapter, a module whose `setup(helpers)` returns `{ records(name), page, open(page, opener, args), guard, close }`:
+
+```sh
+flow-review parity run spec.json --adapter adapter.mjs --out parity [--baseline baseline.json] [--write-baseline baseline.json]
+flow-review parity table parity/parity.json
+flow-review parity issues parity/parity.json --spec spec.json    # one JSON line per gap: key, owner, title, body
+flow-review parity compare parity/parity.json --baseline baseline.json
+```
+
+or from code: `runParity({ spec, records, page, open })`, `parityTable`, `parityIssues`, `parityBaseline` and `parityCompare`.
+
+**Read-only and private by construction.** `launchGuarded({ url, allow })` opens a headless page whose context aborts every request and web socket `allow` doesn't pass (by default, only GET and HEAD to this computer), and counts what it blocked. The report (`flow-review schema parity-report`) holds counts, capability and floor ids, reasons (`open`, `step`, `missing`, `extra`, `attr`, `text`, `hidden`, `ratio`) and salted hashes of the records it opened: never a record's text, a name, an id or a picture. `textNot` compares text inside the page. A redirect's later hops and a service worker's fetches are beyond a route's reach, so the guard counts them as `escaped` and `runParity` refuses to report when there are any (contexts must block service workers; `launchGuarded` does). Pass `salt` (the CLI takes the adapter's `salt` or `FLOW_REVIEW_PARITY_SALT`): a secret kept stable on one machine keeps the hashes stable there without letting anyone check a hash against a guessed id; without it the spec's name is used, which only keeps them stable.
+
+**Gaps become issues.** `parityIssues` turns each gap and unread capability into an issue intent with a stable key (`parity:<spec>:<surface>/<capability>`), its owner, a title and a counts-only body ending in a `parity-key:` line, so a product's own filer finds what it filed before and files each gap once. **A baseline guards CI:** run the same spec on made-up data, keep `parityBaseline`'s statuses, and `--baseline` exits 1 when a capability that passed no longer does.
 
 ## Develop
 
