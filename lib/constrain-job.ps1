@@ -31,6 +31,7 @@ public static class FlowReviewJob {
   [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
   [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
   [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
   [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateIoCompletionPort(IntPtr file, IntPtr existing, IntPtr key, uint threads);
   [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetQueuedCompletionStatus(IntPtr port, out uint bytes, out IntPtr key, out IntPtr overlapped, uint milliseconds);
   [DllImport("ntdll.dll")] static extern int NtSuspendProcess(IntPtr process);
@@ -38,7 +39,7 @@ public static class FlowReviewJob {
   [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint milliseconds);
 
   const int BasicAccountingInformation = 1, BasicProcessIdList = 3, AssociateCompletionPortInformation = 7, ExtendedLimitInformation = 9, CpuRateControlInformation = 15;
-  const uint PROCESS_SUSPEND_RESUME = 0x800;
+  const uint PROCESS_SUSPEND_RESUME = 0x800, PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
   const uint LIMIT_JOB_MEMORY = 0x200, LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
   const uint CPU_RATE_CONTROL_ENABLE = 0x1, CPU_RATE_CONTROL_HARD_CAP = 0x4;
   const uint MSG_PROCESS_MEMORY_LIMIT = 9, MSG_JOB_MEMORY_LIMIT = 10;
@@ -94,15 +95,19 @@ public static class FlowReviewJob {
   static readonly Dictionary<int, IntPtr> handles = new Dictionary<int, IntPtr>();
 
   // A handle held open keeps its process's pid from being given to another process, so a cached handle is always the
-  // process the job lists under that pid. A process that couldn't be opened isn't cached: it is tried again next time,
-  // and a pid it frees is never mistaken for it. Handles of processes that left the job are closed every pass.
+  // process the job lists under that pid. A pid is opened only if the process under it is in the job: one that ended
+  // between the listing and the open may have given its pid to a process outside it, which is never suspended. A
+  // process that couldn't be opened isn't cached, so it is tried again next time. Handles of processes that left the
+  // job are closed every pass.
   static void All(IntPtr job, bool suspend) {
     List<int> pids = Pids(job);
     foreach (int pid in pids) {
       IntPtr h;
       if (!handles.TryGetValue(pid, out h)) {
-        h = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid);
+        h = OpenProcess(PROCESS_SUSPEND_RESUME | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (h == IntPtr.Zero) continue;
+        bool inJob;
+        if (!IsProcessInJob(h, job, out inJob) || !inJob) { CloseHandle(h); continue; }
         handles[pid] = h;
       }
       if (suspend) NtSuspendProcess(h); else NtResumeProcess(h);

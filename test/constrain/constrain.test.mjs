@@ -365,9 +365,18 @@ test('flow-review constrain kills the whole tree when the run times out', { time
 
 test('flow-review constrain passes a .cmd file its arguments as they were given, through cmd.exe', { skip: process.platform !== 'win32' && 'cmd.exe is Windows only', timeout: 60_000 }, async () => {
   const args = ['{"q":"a&b"}', '100%', '%PATH%', 'x y', 'a^b', 'p|q', '"quoted"', 'C:\\a b\\', '(paren)', 'bang!'];
-  const r = await run(['constrain', '--cpu', '1', '--memory-mb', '0', '--disk-latency-ms', '0', '--disk-mb-per-sec', '0', '--net-latency-ms', '0', '--net-down-kbps', '0', '--net-up-kbps', '0', '--', fixture('args.cmd'), ...args]);
-  assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(JSON.parse(r.stdout.split('ARGS ')[1].split('\n')[0]), args);
+  const off = ['--cpu', '1', '--memory-mb', '0', '--disk-latency-ms', '0', '--disk-mb-per-sec', '0', '--net-latency-ms', '0', '--net-down-kbps', '0', '--net-up-kbps', '0'];
+  const argsOf = (r) => JSON.parse(r.stdout.split('ARGS ')[1].split('\n')[0]);
+  // A .cmd that passes them all on through %*, which cmd reads again.
+  const all = await run(['constrain', ...off, '--', fixture('args.cmd'), ...args]);
+  assert.equal(all.status, 0, all.stderr);
+  assert.deepEqual(argsOf(all), args);
+  // A .cmd that reads its first as "%~1": its quotes come off, and nothing else is left on it.
+  for (const first of ['release', 'x y', 'a&b']) {
+    const one = await run(['constrain', ...off, '--', fixture('first.cmd'), first]);
+    assert.equal(one.status, 0, one.stderr);
+    assert.deepEqual(argsOf(one), [first]);
+  }
 });
 
 test('a harness killed by a signal while launchConstrained runs leaves nothing running or stopped', { skip: process.platform === 'win32' && 'POSIX signals', timeout: 120_000 }, async () => {
