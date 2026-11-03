@@ -332,7 +332,7 @@ export interface ParitySpec {
   surfaces: { id: string; title: string; owner?: string; capabilities: ParityCapability[] }[];
 }
 export type ParityStatus = "pass" | "gap" | "unread" | "not-present";
-export interface GuardCounts { allowed: number; blocked: number; blockedByMethod: Record<string, number>; blockedRemote: number; blockedLocal: number; sockets: { allowed: number; blocked: number } }
+export interface GuardCounts { allowed: number; blocked: number; blockedByMethod: Record<string, number>; blockedRemote: number; blockedLocal: number; sockets: { allowed: number; blocked: number }; escaped: number }
 export interface ParityResult {
   surface: string;
   capability: string;
@@ -357,6 +357,7 @@ export interface ParityReport {
   finishedAt: string;
   ms: number;
   guard: GuardCounts | null;
+  only: string[] | null;
   summary: Record<ParityStatus, number>;
   results: ParityResult[];
 }

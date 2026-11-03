@@ -14,9 +14,10 @@
     "guard": {
       "anyOf": [{ "type": "null" }, {
         "type": "object",
-        "properties": { "allowed": { "type": "integer" }, "blocked": { "type": "integer" }, "blockedRemote": { "type": "integer" }, "blockedLocal": { "type": "integer" }, "blockedByMethod": { "type": "object", "additionalProperties": { "type": "integer" } }, "sockets": { "type": "object" } }
+        "properties": { "allowed": { "type": "integer" }, "blocked": { "type": "integer" }, "blockedRemote": { "type": "integer" }, "blockedLocal": { "type": "integer" }, "escaped": { "type": "integer", "maximum": 0 }, "blockedByMethod": { "type": "object", "additionalProperties": { "type": "integer" } }, "sockets": { "type": "object" } }
       }]
     },
+    "only": { "anyOf": [{ "type": "null" }, { "type": "array", "items": { "type": "string" } }] },
     "summary": { "type": "object", "required": ["pass", "gap", "unread", "not-present"], "additionalProperties": { "type": "integer" } },
     "results": {
       "type": "array",

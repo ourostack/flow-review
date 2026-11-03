@@ -130,6 +130,18 @@ test('a detector finds its records, and says when the records lack a field it ne
   const tabs = detect(spec.surfaces[0].capabilities[1].detect, rooms);
   assert.deepEqual(tabs.unread, ['tabs']);
   assert.equal(tabs.found.length, 0);
+  // Nothing in scope is no evidence that a field goes unread.
+  assert.deepEqual(detect(spec.surfaces[0].capabilities[1].detect, []), { scoped: 0, found: [], unread: [] });
+});
+
+test('a data-only capability counts the records that meet its floors; samples must be at least one', async () => {
+  const dataOnly = { version: 0, name: 'd', surfaces: [{ id: 's', title: 'S', capabilities: [{ id: 'c', title: 'C', detect: { records: 'r' }, floor: [{ id: 'f', data: { where: [{ path: 'ok', eq: true }] } }] }] }] };
+  const report = await runParity({ spec: dataOnly, records: () => [{ id: 1, ok: true }, { id: 2, ok: false }] });
+  assert.deepEqual([report.results[0].status, report.results[0].detected, report.results[0].passed], ['gap', 2, 1]);
+  for (const samples of [0, NaN, 1.5]) await assert.rejects(runParity({ spec: dataOnly, records: () => [], samples }), /samples must be/);
+  // Records without their key still sample the same whatever their order.
+  const keyless = [{ a: 1 }, { a: 2 }, { a: 3 }];
+  assert.deepEqual(pickSamples(keyless, { n: 2 }).map((x) => x.h), pickSamples([...keyless].reverse(), { n: 2 }).map((x) => x.h));
 });
 
 test('samples are the same whatever order the records come in, and hashes are salted and never the key', () => {
@@ -217,9 +229,29 @@ test('a run on a guarded page: pass, gap, unread and not present, counts only, a
     const better = parityCompare(report, { ...base, 'notes/quotes': 'gap' });
     assert.deepEqual(better.improvements, [{ id: 'notes/quotes', was: 'gap', now: 'pass' }]);
     assert.deepEqual(parityCompare(report, { ...base, 'notes/gone': 'pass' }).regressions, [{ id: 'notes/gone', was: 'pass', now: 'missing' }]);
+    // A run limited with only compares only what it ran.
+    assert.deepEqual(parityCompare({ ...report, only: ['notes'] }, { ...base, 'other/x': 'pass' }).regressions, []);
   } finally {
     await g?.close();
     await srv.close();
+  }
+});
+
+test('a redirect away from this computer is caught, and the run refuses to report', async () => {
+  const srv = await serve();
+  const bounce = http.createServer((req, res) => { res.writeHead(302, { location: 'http://remote.invalid/' }); res.end(); });
+  await new Promise((r) => bounce.listen(0, '127.0.0.1', r));
+  let g;
+  try {
+    g = await launchGuarded({ url: `${srv.url}/?room=room-a` });
+    await g.page.goto(`http://127.0.0.1:${bounce.address().port}/`).catch(() => {});
+    await g.page.waitForTimeout(300);
+    assert.ok(g.guard.escaped >= 1, JSON.stringify(g.guard));
+    await assert.rejects(runParity({ spec, records: (n) => (n === 'rooms' ? rooms : notes), page: g.page, open: async () => {}, guard: g.guard, waitMs: 200, only: ['rooms/polls'] }), /couldn't stop/);
+  } finally {
+    await g?.close();
+    await srv.close();
+    await new Promise((r) => bounce.close(r));
   }
 });
 
