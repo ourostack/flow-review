@@ -83,7 +83,9 @@ test('each platform picks what it can enforce, and says so', () => {
   assert.throws(() => pickMechanisms(s, { platform: 'win32', cpuMechanism: 'job' }), /unknown CPU mechanism job/);
   assert.equal(jobCpuRate(4, 4), 625, 'one core of four, at a quarter');
   assert.equal(jobCpuRate(4, 1), 2500);
-  assert.equal(windowsCommandLine('npm', ['run', 'say "hi"', 'C:\\a b\\']), 'npm run "say \\"hi\\"" "C:\\a b\\\\"');
+  // Quoted for the program, then every cmd.exe metacharacter escaped with ^ (twice for a .cmd or .bat, which reads %* again).
+  assert.equal(windowsCommandLine('npm', ['run', 'say "hi"', 'C:\\a b\\']), 'npm ^"run^" ^"say^ \\^"hi\\^"^" ^"C:\\a^ b\\\\^"');
+  assert.equal(windowsCommandLine('npm', ['run', 'a&b'], { batch: true }), 'npm ^^^"run^^^" ^^^"a^^^&b^^^"');
   const env = constrainedEnv({ NODE_OPTIONS: '--max-old-space-size=512', NO_PROXY: 'corp' }, s, 'http://127.0.0.1:1');
   assert.match(env.NODE_OPTIONS, /^--max-old-space-size=512 --import=file:.*constrain-fs\.mjs --disable-warning=UNDICI-EHPA$/);
   assert.equal(env.HTTPS_PROXY, 'http://127.0.0.1:1');
@@ -254,6 +256,7 @@ test("flow-review constrain: the platform's other CPU mechanism", { skip: proces
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   console.log(`${other[0]} on ${summary.platform}: ${describe(summary)}`);
   assert.equal(summary.cpu.mechanism, other[1]);
+  if (process.platform === 'linux') assert.equal(summary.cpu.quota ?? null, null, 'under the duty cycle a cgroup holds memory only, never a CPU cap as well');
   assert.equal(r.status, 0, r.stderr);
   assert.equal(summary.cpu.within, true);
 });
@@ -358,4 +361,37 @@ test('flow-review constrain kills the whole tree when the run times out', { time
   assert.equal(summary.ok, false);
   assert.ok(fs.existsSync(pidsFile), 'the command had started');
   assert.deepEqual(await leftRunning(pidsFile), [], 'the command and everything it started are gone');
+});
+
+test('flow-review constrain passes a .cmd file its arguments as they were given, through cmd.exe', { skip: process.platform !== 'win32' && 'cmd.exe is Windows only', timeout: 60_000 }, async () => {
+  const args = ['{"q":"a&b"}', '100%', '%PATH%', 'x y', 'a^b', 'p|q', '"quoted"', 'C:\\a b\\', '(paren)', 'bang!'];
+  const r = await run(['constrain', '--cpu', '1', '--memory-mb', '0', '--disk-latency-ms', '0', '--disk-mb-per-sec', '0', '--net-latency-ms', '0', '--net-down-kbps', '0', '--net-up-kbps', '0', '--', fixture('args.cmd'), ...args]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout.split('ARGS ')[1].split('\n')[0]), args);
+});
+
+test('a harness killed by a signal while launchConstrained runs leaves nothing running or stopped', { skip: process.platform === 'win32' && 'POSIX signals', timeout: 120_000 }, async () => {
+  const pidsFile = path.join(scratch, 'left-signal.json');
+  fs.rmSync(pidsFile, { force: true });
+  const lib = pathToFileURL(path.join(root, 'lib', 'constrain.mjs')).href;
+  // The duty cycle, so the tree is stopped three quarters of the time when the signal lands.
+  const script = `import { launchConstrained } from ${JSON.stringify(lib)};
+const run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
+await run.ready;
+console.log('READY');
+await run.done;`;
+  const harness = spawn(process.execPath, ['--input-type=module', '-e', script], { cwd: root, env: { ...process.env, [CONSTRAINED_ENV]: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  harness.stderr.on('data', (d) => { stderr += d; });
+  const ended = new Promise((resolve) => harness.on('exit', (code, signal) => resolve({ code, signal })));
+  await new Promise((resolve, reject) => {
+    harness.stdout.on('data', (d) => { if (String(d).includes('READY')) resolve(); });
+    ended.then(() => reject(new Error(`the harness ended before the command started: ${stderr}`)));
+  });
+  for (let i = 0; i < 50 && !fs.existsSync(pidsFile); i++) await new Promise((r) => setTimeout(r, 100));
+  assert.ok(fs.existsSync(pidsFile), 'the command started its processes');
+  await new Promise((r) => setTimeout(r, 500));
+  harness.kill('SIGTERM');
+  assert.deepEqual(await ended, { code: null, signal: 'SIGTERM' }, 'the harness still ends as the signal ends it');
+  assert.deepEqual(await leftRunning(pidsFile), [], 'the command and everything it started are gone, none left stopped');
 });

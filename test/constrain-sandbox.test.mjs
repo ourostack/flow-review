@@ -14,6 +14,7 @@ const scratch = path.join(root, '.scratch', 'constrain-sandbox');
 const workstation = { GITHUB_ACTIONS: '', CI: '', [SANDBOX_ENV]: '', FLOW_REVIEW_CONSTRAINED: '' };
 const nothingSlowed = ['--cpu', '1', '--memory-mb', '0', '--disk-latency-ms', '0', '--disk-mb-per-sec', '0', '--net-latency-ms', '0', '--net-down-kbps', '0', '--net-up-kbps', '0'];
 const cli = (args, env = workstation) => spawnSync(process.execPath, ['bin/flow-review.mjs', ...args], { cwd: root, encoding: 'utf8', timeout: 20_000, env: { ...process.env, ...env } });
+const PAGE_CPU_REFUSED = /refusing to throttle the CPU of browser pages on this computer: DevTools CPU throttling holds one core busy for every throttled page, so it runs only on a CI runner \(GITHUB_ACTIONS=true or CI=true\) or on a disposable machine that declares itself one with FLOW_REVIEW_CONSTRAIN_SANDBOX=1.*Nothing was throttled\./;
 const REFUSED = /refusing to constrain this computer: flow-review constrain runs only on a CI runner \(GITHUB_ACTIONS=true or CI=true\) or on a disposable machine that declares itself one with FLOW_REVIEW_CONSTRAIN_SANDBOX=1.*Nothing was started\./;
 
 test('only a CI runner or a declared sandbox is a host constrain may run on', () => {
@@ -65,4 +66,33 @@ try {
   assert.match(r.stdout, /^THREW /);
   assert.match(r.stdout, REFUSED);
   assert.doesNotMatch(r.stdout, /STARTED|RAN/);
+});
+
+test('throttling the CPU of pages on a workstation is refused before anything is sent; the network alone is not', () => {
+  const lib = (f) => JSON.stringify(pathToFileURL(path.join(root, 'lib', f)).href);
+  const script = `import { constrainPage, constrainContext, constrainCdp, applyCdpConstraints } from ${lib('constrain-cdp.mjs')};
+import { resolveSettings } from ${lib('constrain-profile.mjs')};
+import { run } from ${lib('run.mjs')};
+const settings = resolveSettings('old-windows-laptop');
+const sent = [];
+const send = async (method) => { sent.push(method); return {}; };
+const page = { context: () => { sent.push('context'); throw new Error('reached the page'); } };
+const out = {};
+const attempt = async (name, fn) => { try { await fn(); out[name] = 'ran'; } catch (e) { out[name] = e.message; } };
+await attempt('page', () => constrainPage(page, settings));
+await attempt('context', () => constrainContext({ on: () => sent.push('on'), pages: () => [page] }, settings));
+await attempt('cdp', () => constrainCdp('http://127.0.0.1:9', settings));
+await attempt('apply', () => applyCdpConstraints(send, settings));
+await attempt('run', () => run({ globs: [], constrained: settings, log: () => {} }));
+const refusedSent = sent.length;
+const net = await applyCdpConstraints(send, settings, { cpu: false });
+console.log(JSON.stringify({ out, refusedSent, sent, net }));`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: root, encoding: 'utf8', timeout: 20_000, env: { ...process.env, ...workstation } });
+  assert.equal(r.status, 0, r.stderr);
+  const { out, refusedSent, sent, net } = JSON.parse(r.stdout);
+  for (const [name, message] of Object.entries(out)) assert.match(message, PAGE_CPU_REFUSED, name);
+  assert.equal(refusedSent, 0, 'nothing reached a page, a browser or DevTools');
+  assert.deepEqual(sent, ['Network.enable', 'Network.emulateNetworkConditions'], 'with cpu: false only the network is slowed');
+  assert.equal(net.cpu.rate, null);
+  assert.equal(net.network.latencyMs, 150);
 });

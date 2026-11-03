@@ -93,18 +93,26 @@ public static class FlowReviewJob {
   static Thread dutyThread;
   static readonly Dictionary<int, IntPtr> handles = new Dictionary<int, IntPtr>();
 
+  // A handle held open keeps its process's pid from being given to another process, so a cached handle is always the
+  // process the job lists under that pid. A process that couldn't be opened isn't cached: it is tried again next time,
+  // and a pid it frees is never mistaken for it. Handles of processes that left the job are closed every pass.
   static void All(IntPtr job, bool suspend) {
     List<int> pids = Pids(job);
     foreach (int pid in pids) {
       IntPtr h;
-      if (!handles.TryGetValue(pid, out h)) { h = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid); handles[pid] = h; }
-      if (h == IntPtr.Zero) continue;
+      if (!handles.TryGetValue(pid, out h)) {
+        h = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid);
+        if (h == IntPtr.Zero) continue;
+        handles[pid] = h;
+      }
       if (suspend) NtSuspendProcess(h); else NtResumeProcess(h);
     }
-    if (handles.Count > pids.Count * 2 + 16) {
+    if (handles.Count > pids.Count) {
+      Dictionary<int, bool> live = new Dictionary<int, bool>();
+      foreach (int pid in pids) live[pid] = true;
       List<int> gone = new List<int>();
-      foreach (int pid in handles.Keys) if (!pids.Contains(pid)) gone.Add(pid);
-      foreach (int pid in gone) { if (handles[pid] != IntPtr.Zero) CloseHandle(handles[pid]); handles.Remove(pid); }
+      foreach (int pid in handles.Keys) if (!live.ContainsKey(pid)) gone.Add(pid);
+      foreach (int pid in gone) { CloseHandle(handles[pid]); handles.Remove(pid); }
     }
   }
 

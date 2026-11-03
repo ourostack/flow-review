@@ -312,9 +312,9 @@ when it is off by more than 25%, prints a banner before and after, and writes a 
 schema constrained`) with the factor, which limits were enforced or only detected, and which were hit. Windows uses a
 job object, Linux in CI a cgroup, macOS a stop/continue duty cycle and a memory watch. Browser pages are slowed through
 DevTools: `flow-review run --constrained old-windows-laptop`, or `constrainPage` and `constrainCdp` (WebView2 too) in
-any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the review engine. It runs only on a CI
-runner or on a disposable machine that sets `FLOW_REVIEW_CONSTRAIN_SANDBOX=1` (a Dev Box made for the run), refusing
-anywhere else before it starts anything, and kills everything it started when the run ends or passes
+any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the review engine. It, and the CPU
+throttling of pages, runs only on a CI runner or on a disposable machine that sets `FLOW_REVIEW_CONSTRAIN_SANDBOX=1` (a
+Dev Box made for the run), refusing anywhere else before it starts anything, and kills everything it started when the run ends or passes
 `--timeout-minutes`. See [Constrained computer](docs/constrained-computer.md) for each resource on each platform, what
 isn't slowed, and why it loads nothing but the tree it slows.
 

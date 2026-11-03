@@ -455,7 +455,7 @@ export declare const SANDBOX_ENV: "FLOW_REVIEW_CONSTRAIN_SANDBOX";
 /** What makes this host one flow-review constrain may run on (a CI runner, or a declared disposable sandbox), or null. */
 export declare function sandboxedHost(env?: Record<string, string | undefined>): string | null;
 /** Throws, naming how to allow it, unless this host is a CI runner or a declared disposable sandbox. */
-export declare function assertSandboxedHost(env?: Record<string, string | undefined>): string;
+export declare function assertSandboxedHost(env?: Record<string, string | undefined>, options?: { what?: "constrain" | "page-cpu" }): string;
 export declare function constrainedEnv(env: Record<string, string | undefined>, info: ConstrainedSettings, proxyUrl?: string | null): Record<string, string>;
 export interface ConstrainedRun {
   /** Resolves once the slowdown is measured and the command has started. */
@@ -468,8 +468,8 @@ export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: st
 export declare function launchConstrained(command: string, args?: string[], options?: ConstrainOptions): ConstrainedRun;
 export declare function runConstrainedCommand(command: string, args?: string[], options?: ConstrainOptions): Promise<ConstrainedSummary>;
 export declare function constrainPage(page: import("playwright").Page, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<CdpConstraintResult | null>;
-export declare function constrainContext(context: import("playwright").BrowserContext, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: CdpConstraintResult[] } | null>;
-export declare function constrainCdp(endpoint: string, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: (CdpConstraintResult & { targetId: string; url: string })[]; close(): Promise<void> } | null>;
+export declare function constrainContext(context: import("playwright").BrowserContext, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: CdpConstraintResult[]; failed: { url: string; error: string }[] } | null>;
+export declare function constrainCdp(endpoint: string, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: (CdpConstraintResult & { targetId: string; url: string })[]; failed: { targetId: string; url: string; error: string }[]; close(): Promise<void> } | null>;
 export declare function applyCdpConstraints(send: (method: string, params?: object) => Promise<any>, settings: ConstrainedSettings, options?: CdpOptions): Promise<CdpConstraintResult>;
 export declare function startDelayProxy(opts?: { latencyMs?: number; downKbps?: number; upKbps?: number; port?: number; host?: string }): Promise<{ url: string; port: number; stats(): { requests: number; tunnels: number; failed: number; bytesUp: number; bytesDown: number }; close(): Promise<void> }>;
 export declare function spin(iterations: number): number;

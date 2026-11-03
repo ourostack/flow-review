@@ -16,7 +16,8 @@ It isn't part of the review engine: any app or harness can use it, from the comm
 ## Where it runs: only on a machine it may slow
 
 `flow-review constrain` starts helper processes, stops and continues a process tree and, on Linux, makes a cgroup with
-`sudo`, so it runs only where nobody is working:
+`sudo`, and DevTools CPU throttling keeps a core busy for every page it slows, so both run only where nobody is
+working:
 
 - on a CI runner: `GITHUB_ACTIONS=true` or `CI=true` (GitHub's runners set both);
 - on a disposable machine that declares itself a sandbox with `FLOW_REVIEW_CONSTRAIN_SANDBOX=1`, such as a Dev Box, VM
@@ -25,8 +26,10 @@ It isn't part of the review engine: any app or harness can use it, from the comm
 
 Anywhere else it refuses with exit code 2 before it starts anything: no proxy, no gate, no command, no summary.
 `launchConstrained` throws the same way, checking the environment of the process that calls it, not the one it would
-give the command. `--print` starts nothing, so it works anywhere. To slow only browser pages on your own computer, use
-`flow-review run --constrained` or `constrainPage`, which change nothing outside the browser.
+give the command. `--print` starts nothing, so it works anywhere. Throttling the CPU of browser pages (`flow-review run
+--constrained`, `constrainPage`, `constrainContext`, `constrainCdp`) is refused the same way, before a browser is
+launched or a page is reached. To slow only the network of pages on your own computer, give them a CPU of 1:
+`constrainPage(page, settings, { cpu: false })`, or `FLOW_REVIEW_CONSTRAINED='{"profile":"old-windows-laptop","cpu":1}'`.
 
 ## It slows the tree it starts, and loads nothing else
 
@@ -46,13 +49,16 @@ give the command. `--print` starts nothing, so it works anywhere. To slow only b
   tree's watch has seen even if it left the group, the cgroup's processes, and the job's. The watch samples the tree
   four times a second, so on macOS (and Linux without the cgroup) a process that leaves the group and whose parent ends
   within a quarter of a second of it starting can escape; the job and the cgroup leave no such gap. If the gate loses
-  the constraining process, it kills its own process group.
+  the constraining process, it kills its own process group. A harness calling `launchConstrained` that is ended by
+  `SIGINT`, `SIGTERM` or `SIGHUP` kills the tree first (continuing it if the duty cycle had it stopped), then ends as
+  the signal would have ended it, unless it handles that signal itself, as the CLI does to stop the run and report.
 - **A hard time limit.** `--timeout-minutes` (default 60; `timeoutMinutes` from code) ends the run when it is reached,
   however far it got: the whole tree is killed, the summary has `timedOut: true` and the exit code is 5.
 - **Browser pages are throttled by Chromium itself.** DevTools' CPU throttling holds the page's main thread in a busy
   wait for the slowed share of every moment, so a throttled page keeps about one core busy until it is closed or the
-  throttling is lifted, even when idle. `constrainCdp`'s `close()` lifts it from every page it throttled; close a
-  Playwright page or browser throttled with `constrainPage` when you're done with it.
+  throttling is lifted, even when idle, which is why it runs only on a CI runner or a declared sandbox. `constrainCdp`'s
+  `close()` lifts it from every page it attached to, and so does a `constrainCdp` that fails; close a Playwright page
+  or browser throttled with `constrainPage` when you're done with it.
 
 This repository's own tests check the same for every harness here: `test/no-load-generators.test.mjs` fails on any
 spawn of `yes`, `stress` or `stress-ng`, and on any endless loop, in the engine, its tests and fixtures, the workflows,
@@ -81,7 +87,7 @@ the app never feels the pressure of being near it.
 
 | | Windows | Linux in CI | Linux elsewhere, macOS |
 | --- | --- | --- | --- |
-| CPU, processes | Enforced: a job object's hard CPU-rate cap | Enforced: a cgroup v2 `cpu.max` | Enforced: a stop/continue duty cycle |
+| CPU, processes | Enforced: a suspend/resume duty cycle of a job object's processes | Enforced: a cgroup v2 `cpu.max` | Enforced: a stop/continue duty cycle |
 | CPU, browser pages | Enforced: DevTools CPU throttling | the same | the same |
 | Memory | Enforced: the job's committed-memory limit | Enforced: the cgroup's `memory.max`, with no swap | Detected: the tree's resident memory, sampled 4 times a second |
 | Disk | Node processes' `fs` calls | the same | the same |
@@ -93,11 +99,15 @@ constrained from their first instruction. The two timings are the slowdown achie
 (`--tolerance`) from the profile's, the command doesn't run and the exit code is 4. The measured factor is in the
 banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
 
-- Windows: the job's cap is a share of the whole machine, set so the tree has one core at a quarter of its speed
-  (`10000 / (4 × logical CPUs)` cycles in 10,000). A single thread runs 4× slower; work spread over several threads is
-  slowed more, because the threads share that one slowed core.
-- Linux: when `CI=true` and `sudo -n` works (as on GitHub's runners), a cgroup with `cpu.max` of a quarter of one core:
-  the same as Windows. `--cpu-mechanism cgroup` asks for it anywhere; `duty-cycle` refuses it.
+- Windows: every process in the job is suspended and resumed in turn, running a quarter of every 10 ms, so every
+  thread runs 4× slower, as with the duty cycle below. `--cpu-mechanism hard-cap` uses the job's hard CPU-rate cap
+  instead: a share of the whole machine, set so the tree has one core at a quarter of its speed (`10000 / (4 × logical
+  CPUs)` cycles in 10,000). A single thread runs 4× slower; work spread over several threads is slowed more, because
+  the threads share that one slowed core.
+- Linux: when `CI=true` and `sudo -n` works (as on GitHub's runners), a cgroup with `cpu.max` of a quarter of one core
+  every 10 ms (a longer period above 10×, as the kernel's quota is at least 1 ms): the same as Windows' hard cap.
+  `--cpu-mechanism hard-cap` asks for it anywhere; `duty-cycle` uses the duty cycle instead, and the cgroup, when there
+  is one, then caps memory only.
 - macOS, and Linux without the cgroup: the tree is stopped (`SIGSTOP`) and continued (`SIGCONT`) in turn, running a
   quarter of every 10 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The cycle
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
@@ -107,8 +117,15 @@ banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
   a quarter of a second of starting. If the constraining process is killed outright (`SIGKILL`), it can't clean up:
   the tree may be left stopped, using no CPU; `kill -KILL -<pid>` ends it.
 - Browser pages: `Emulation.setCPUThrottlingRate`, as DevTools' CPU throttling. `constrainPage(page, settings,
-  { calibrate: true })` measures it too. A page whose processes are already in a constrained tree isn't throttled
-  again, so nothing is slowed twice.
+  { calibrate: true })` measures it too: the loop is timed in the page unthrottled and throttled in turn, five times,
+  and the factor is the median of the five pairs (each in `cpu.factors`), so a moment when the computer runs faster or
+  slower than usual isn't taken for the slowdown. A page whose processes are already in a constrained tree isn't
+  throttled again, so nothing is slowed twice. Chromium slows a page in slices: on Windows it suspends the page's main
+  thread for about 165 µs of every 210 (measured about 4.4×); on Linux and macOS a thread signals the main thread
+  every 200 µs to busy-wait three times as long as it ran, counting at most 1 ms of running. Linux wakes that thread on
+  time (4.1–4.2×). macOS often wakes it 0.3–1.5 ms late, so the pauses after a run of over 1 ms are cut short and the
+  page gets more than its share; on GitHub's macOS runners the factor measured 3.5–4.1×, and dips lower for a moment
+  when the wake-ups are late for long.
 
 The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too. On a
 heavily loaded computer, and on Apple silicon, where a process can move between performance and efficiency cores, the

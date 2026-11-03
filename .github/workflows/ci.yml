@@ -69,10 +69,6 @@ jobs:
           key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --only-shell chromium
-      # TEMPORARY (PR #9): evidence for the DevTools throttling failure; removed before merge.
-      - run: node test/constrain/diag-throttle.mjs
-        continue-on-error: true
-        timeout-minutes: 3
       - run: npm run test:constrain
 
   # The action on the fixture flows, which fail on purpose: report only here.
