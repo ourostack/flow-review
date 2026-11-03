@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ourostack/flow-review/schema/constrained-0.schema.json",
+  "title": "flow-review-constrained/0",
+  "description": "What a flow-review constrain run did: the profile and settings, the CPU slowdown it measured, which limits were enforced or only detected, which were hit, and how the command ended.",
+  "type": "object",
+  "required": ["schema", "tool", "profile", "settings", "platform", "command", "startedAt", "finishedAt", "ms", "cpu", "memory", "disk", "network", "capsHit", "exitCode", "signal", "error", "ok"],
+  "definitions": {
+    "settings": {
+      "type": "object",
+      "required": ["cpu", "memoryMB", "disk", "network"],
+      "properties": {
+        "cpu": { "type": "number", "minimum": 1 },
+        "memoryMB": { "type": "number", "minimum": 0 },
+        "disk": { "type": "object", "required": ["latencyMs", "mbPerSec"], "properties": { "latencyMs": { "type": "number", "minimum": 0 }, "mbPerSec": { "type": "number", "minimum": 0 } } },
+        "network": { "type": "object", "required": ["latencyMs", "downKbps", "upKbps"], "properties": { "latencyMs": { "type": "number", "minimum": 0 }, "downKbps": { "type": "number", "minimum": 0 }, "upKbps": { "type": "number", "minimum": 0 } } }
+      }
+    }
+  },
+  "properties": {
+    "schema": { "const": "flow-review-constrained-0" },
+    "tool": { "type": "object", "required": ["name", "version"], "properties": { "name": { "type": "string" }, "version": { "type": "string" } } },
+    "profile": { "type": "string" },
+    "settings": { "$ref": "#/definitions/settings" },
+    "overridden": { "type": "array", "items": { "type": "string" } },
+    "platform": { "type": "string" },
+    "command": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "startedAt": { "type": "string" },
+    "finishedAt": { "type": "string" },
+    "ms": { "type": "number" },
+    "cpu": {
+      "type": "object",
+      "required": ["target", "mechanism", "enforcement", "scope", "achieved", "tolerance", "within"],
+      "properties": {
+        "target": { "type": "number" },
+        "mechanism": { "enum": ["job-cpu-rate", "cgroup-cpu-max", "duty-cycle", null] },
+        "enforcement": { "enum": ["enforced", null] },
+        "scope": { "enum": ["tree", "thread", null], "description": "tree: the whole process tree shares one core slowed by the factor; thread: every thread runs slowed by the factor, in parallel." },
+        "achieved": { "type": ["number", "null"], "description": "The slowdown the calibration loop measured inside the tree before the command started." },
+        "tolerance": { "type": "number" },
+        "within": { "type": ["boolean", "null"] },
+        "baselineMs": { "type": ["number", "null"] },
+        "constrainedMs": { "type": ["number", "null"] },
+        "iterations": { "type": ["integer", "null"] },
+        "cpus": { "type": "integer" },
+        "rate": { "type": ["integer", "null"], "description": "Windows: the job's CPU rate, in cycles per 10,000 across all processors." },
+        "quota": { "type": ["string", "null"], "description": "Linux: the cgroup's cpu.max." },
+        "duty": { "type": "object" },
+        "cpuSeconds": { "type": "number" },
+        "processes": { "type": "integer" },
+        "throttledPeriods": { "type": "integer" }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "required": ["capMB", "mechanism", "enforcement", "peakMB", "hit"],
+      "properties": {
+        "capMB": { "type": ["number", "null"] },
+        "mechanism": { "enum": ["job-memory", "cgroup-memory-max", "rss-watch", null] },
+        "enforcement": { "enum": ["enforced", "detected", null] },
+        "peakMB": { "type": ["number", "null"] },
+        "hit": { "type": "boolean" },
+        "limitHits": { "type": "integer" },
+        "events": { "type": "object" }
+      }
+    },
+    "disk": { "type": "object", "required": ["latencyMs", "mbPerSec", "mechanism"], "properties": { "mechanism": { "enum": ["node-fs-preload", null] } } },
+    "network": { "type": "object", "required": ["latencyMs", "downKbps", "upKbps", "mechanism", "proxy"], "properties": { "mechanism": { "enum": ["delay-proxy", null] }, "proxy": { "type": ["string", "null"] } } },
+    "capsHit": { "type": "array", "items": { "enum": ["memory"] } },
+    "exitCode": { "type": ["integer", "null"] },
+    "signal": { "type": ["string", "null"] },
+    "error": { "type": ["string", "null"] },
+    "ok": { "type": "boolean" }
+  }
+}

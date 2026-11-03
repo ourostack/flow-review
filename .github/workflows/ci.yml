@@ -40,6 +40,36 @@ jobs:
         run: npx playwright install --only-shell chromium
       - run: npm test
 
+  # The constrained computer on each platform it supports: the CPU slowdown measured at about 4x, a grandchild slowed
+  # as much, the memory cap enforced (Windows, Linux) or detected (macOS), the proxy's latency, and pages throttled.
+  constrain:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - id: pw
+        shell: bash
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: browsers
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/ms-playwright' || runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+          key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --only-shell chromium
+      - run: node --test --test-reporter=spec test/constrain.test.mjs
+
   # The action on the fixture flows, which fail on purpose: report only here.
   action:
     runs-on: ubuntu-latest

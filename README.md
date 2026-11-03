@@ -262,7 +262,7 @@ test("buttons meet the bar", async ({ page }) => {
 });
 ```
 
-`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.4.0`).
+`checks` has `axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `cls`, `jank`, `keyboard` and `focusVisible`; each takes the same options as a flow's `checks` block. `expectNoFindings` throws an error listing every failing finding with its measurement and fix. Launch the page's browser with `launchBrowser(chromium, options)` to keep it headless outside CI (see [Run it](#run-it)). Install the package from a release tag (`npm install --save-dev github:ourostack/flow-review#v0.5.0`).
 
 ## Capability parity
 
@@ -302,6 +302,18 @@ or from code: `runParity({ spec, records, page, open })`, `parityTable`, `parity
 **Read-only and private by construction.** `launchGuarded({ url, allow })` opens a headless page whose context aborts every request and web socket `allow` doesn't pass (by default, only GET and HEAD to this computer), and counts what it blocked. The report (`flow-review schema parity-report`) holds counts, capability and floor ids, reasons (`open`, `step`, `missing`, `extra`, `attr`, `text`, `hidden`, `ratio`) and salted hashes of the records it opened: never a record's text, a name, an id or a picture. `textNot` compares text inside the page. A redirect's later hops and a service worker's fetches are beyond a route's reach, so the guard counts them as `escaped` and `runParity` refuses to report when there are any (contexts must block service workers; `launchGuarded` does). Pass `salt` (the CLI takes the adapter's `salt` or `FLOW_REVIEW_PARITY_SALT`): a secret kept stable on one machine keeps the hashes stable there without letting anyone check a hash against a guessed id; without it the spec's name is used, which only keeps them stable.
 
 **Gaps become issues.** `parityIssues` turns each gap and unread capability into an issue intent with a stable key (`parity:<spec>:<surface>/<capability>`), its owner, a title and a counts-only body ending in a `parity-key:` line, so a product's own filer finds what it filed before and files each gap once. **A baseline guards CI:** run the same spec on made-up data, keep `parityBaseline`'s statuses, and `--baseline` exits 1 when a capability that passed no longer does.
+
+## Constrained computer
+
+`flow-review constrain -- <command>` runs a command, and everything it starts, as on a slow old Windows laptop (the
+`old-windows-laptop` profile): CPU 4× slower, memory capped at 2048 MB, Node's file system calls slowed, and the network
+slowed through a local proxy. It measures the CPU slowdown it achieved before the command starts and refuses to run
+when it is off by more than 25%, prints a banner before and after, and writes a summary (`--summary`, `flow-review
+schema constrained`) with the factor, which limits were enforced or only detected, and which were hit. Windows uses a
+job object, Linux in CI a cgroup, macOS a stop/continue duty cycle and a memory watch. Browser pages are slowed through
+DevTools: `flow-review run --constrained old-windows-laptop`, or `constrainPage` and `constrainCdp` (WebView2 too) in
+any harness, switched on by `FLOW_REVIEW_CONSTRAINED`. It is independent of the review engine. See
+[Constrained computer](docs/constrained-computer.md) for each resource on each platform, and what isn't slowed.
 
 ## Develop
 

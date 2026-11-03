@@ -393,3 +393,75 @@ export declare function parityTable(report: ParityReport): string;
 export declare function parityIssues(report: ParityReport, spec?: ParitySpec | null): ParityIssue[];
 export declare function parityBaseline(report: ParityReport): Record<string, ParityStatus>;
 export declare function parityCompare(report: ParityReport, baseline: Record<string, ParityStatus>): { regressions: { id: string; was: string; now: string }[]; improvements: { id: string; was: string; now: string }[] };
+
+// Constrained computer.
+export interface ConstrainedSettings {
+  profile: string;
+  /** How many times slower every CPU-bound step runs; 1 is off. */
+  cpu: number;
+  /** The process tree's memory cap; 0 is off. */
+  memoryMB: number;
+  /** Added to each fs call of a Node process, with throughput in megabytes a second; 0 is off. */
+  disk: { latencyMs: number; mbPerSec: number };
+  /** Round-trip latency and throughput in kilobits a second; 0 is off. */
+  network: { latencyMs: number; downKbps: number; upKbps: number };
+  overridden?: string[];
+  /** Set inside a tree flow-review constrain launched: its processes are already CPU-throttled. */
+  tree?: { cpu: CpuMechanism | null; memory: MemoryMechanism | null; achieved: number | null };
+  proxy?: string | null;
+}
+export type CpuMechanism = "job-cpu-rate" | "cgroup-cpu-max" | "duty-cycle";
+export type MemoryMechanism = "job-memory" | "cgroup-memory-max" | "rss-watch";
+export interface ConstrainedOverrides { cpu?: number | string; memoryMB?: number | string; disk?: { latencyMs?: number | string; mbPerSec?: number | string }; network?: { latencyMs?: number | string; downKbps?: number | string; upKbps?: number | string } }
+export interface ConstrainedSummary {
+  schema: "flow-review-constrained-0";
+  tool: { name: string; version: string };
+  profile: string;
+  settings: Pick<ConstrainedSettings, "cpu" | "memoryMB" | "disk" | "network">;
+  overridden: string[];
+  platform: string;
+  command: string[];
+  startedAt: string;
+  finishedAt: string;
+  ms: number;
+  cpu: { target: number; mechanism: CpuMechanism | null; enforcement: "enforced" | null; scope: "tree" | "thread" | null; achieved: number | null; tolerance: number; within: boolean | null; baselineMs: number | null; constrainedMs: number | null; iterations: number | null; cpus: number; rate?: number | null; quota?: string | null; [k: string]: unknown };
+  memory: { capMB: number | null; mechanism: MemoryMechanism | null; enforcement: "enforced" | "detected" | null; peakMB: number | null; hit: boolean; [k: string]: unknown };
+  disk: { latencyMs: number; mbPerSec: number; mechanism: "node-fs-preload" | null };
+  network: { latencyMs: number; downKbps: number; upKbps: number; mechanism: "delay-proxy" | null; proxy: string | null; requests?: number; tunnels?: number; bytesUp?: number; bytesDown?: number };
+  capsHit: "memory"[];
+  exitCode: number | null;
+  signal: string | null;
+  error: string | null;
+  ok: boolean;
+}
+export interface CdpConstraintResult { cpu: { rate: number | null; skipped: string | null; achieved: number | null; baselineMs?: number; constrainedMs?: number }; network: { latencyMs: number; downKbps: number; upKbps: number } | null }
+export interface CdpOptions { cpu?: boolean; network?: boolean; calibrate?: boolean; calibrateMs?: number }
+
+export declare const PROFILES: Readonly<Record<string, Readonly<Omit<ConstrainedSettings, "profile" | "overridden" | "tree" | "proxy">>>>;
+export declare const DEFAULT_PROFILE: string;
+export declare const CONSTRAINED_ENV: "FLOW_REVIEW_CONSTRAINED";
+export declare const CONSTRAINED_SCHEMA: "flow-review-constrained-0";
+export declare function resolveSettings(profile?: string, overrides?: ConstrainedOverrides): ConstrainedSettings;
+export declare function constrainedFromEnv(env?: Record<string, string | undefined>): ConstrainedSettings | null;
+export declare function bannerLine(settings: ConstrainedSettings, extra?: { cpu?: { achieved?: number | null; mechanism?: string | null } | null; memory?: { enforcement?: string | null } | null }): string;
+export declare function pickMechanisms(settings: ConstrainedSettings, opts?: { cpuMechanism?: "auto" | "job" | "cgroup" | "duty-cycle"; platform?: string; env?: Record<string, string | undefined>; cgroup?: () => boolean }): { cpu: CpuMechanism | null; memory: MemoryMechanism | null };
+export declare function constrainedEnv(env: Record<string, string | undefined>, info: ConstrainedSettings, proxyUrl?: string | null): Record<string, string>;
+export interface ConstrainedRun {
+  /** Resolves once the slowdown is measured and the command has started. */
+  ready: Promise<{ env: Record<string, string>; cpu: ConstrainedSummary["cpu"]; mechanisms: { cpu: CpuMechanism | null; memory: MemoryMechanism | null }; proxy: string | null }>;
+  /** Resolves when the command and everything it left running have ended. */
+  done: Promise<ConstrainedSummary>;
+  stop(signal?: string): void;
+}
+export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "job" | "cgroup" | "duty-cycle"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null }
+export declare function launchConstrained(command: string, args?: string[], options?: ConstrainOptions): ConstrainedRun;
+export declare function runConstrainedCommand(command: string, args?: string[], options?: ConstrainOptions): Promise<ConstrainedSummary>;
+export declare function constrainPage(page: import("playwright").Page, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<CdpConstraintResult | null>;
+export declare function constrainContext(context: import("playwright").BrowserContext, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: CdpConstraintResult[] } | null>;
+export declare function constrainCdp(endpoint: string, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<{ applied: (CdpConstraintResult & { targetId: string; url: string })[]; close(): void } | null>;
+export declare function applyCdpConstraints(send: (method: string, params?: object) => Promise<any>, settings: ConstrainedSettings, options?: CdpOptions): Promise<CdpConstraintResult>;
+export declare function startDelayProxy(opts?: { latencyMs?: number; downKbps?: number; upKbps?: number; port?: number; host?: string }): Promise<{ url: string; port: number; stats(): { requests: number; tunnels: number; failed: number; bytesUp: number; bytesDown: number }; close(): Promise<void> }>;
+export declare function spin(iterations: number): number;
+export declare function timeSpin(iterations: number, samples?: number): number;
+export declare function calibrationBaseline(targetMs?: number, samples?: number): { iterations: number; ms: number };
+export declare function factorOf(ms: number, baseMs: number): number;

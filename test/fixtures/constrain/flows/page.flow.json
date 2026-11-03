@@ -1,0 +1,12 @@
+{
+  "schema": "flow-review/0",
+  "name": "Constrained page",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5311 test/fixtures/site", "url": "http://127.0.0.1:5311/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [true] },
+  "steps": [
+    { "goto": "/" },
+    { "waitFor": { "text": "First thing" } }
+  ],
+  "checks": { "skip": ["jank"] }
+}
