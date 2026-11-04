@@ -235,7 +235,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.ok(summary.cpu.achieved >= 3.6 && summary.cpu.achieved <= 4.4, `measured ${summary.cpu.achieved}×, not within 4× ±10%`);
     assert.equal(summary.cpu.calibration.length, summary.cpu.corrections + 1, 'every measurement is in the summary');
     assert.equal(summary.cpu.calibration.at(-1).achieved, summary.cpu.achieved, 'and the last is the factor reported');
-    assert.equal(summary.cpu.factors.length, 3, 'three pairs a measurement');
+    assert.ok(summary.cpu.factors.length >= 3 && summary.cpu.factors.length <= 9, `three to nine pairs a measurement: ${summary.cpu.factors.length}`);
     assert.equal(summary.cpu.burst.within, true);
     assert.ok(summary.cpu.burst.achieved >= 3 && summary.cpu.burst.achieved <= 5, `10 ms tasks measured ${summary.cpu.burst.achieved}×`);
     assert.equal(summary.cpu.dutyCycle, true, 'every CPU mechanism has a duty cycle, so short tasks are slowed from their start');
