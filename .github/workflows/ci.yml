@@ -59,8 +59,10 @@ jobs:
   webkit-mac:
     runs-on: macos-latest
     timeout-minutes: 15
+    # The runner's headless Chromium has no GPU and drops frames of its own: Linux holds Chromium's smooth baseline, and
+    # this job holds the WebKit side of the wheel tests (and both sides of the measurements that don't hang on frames).
     env:
-      FLOW_REVIEW_PARITY: '1'
+      FLOW_REVIEW_PARITY: webkit
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -414,6 +414,13 @@
         },
         "reducedMotion": {
           "type": "boolean"
+        },
+        "engine": {
+          "enum": [
+            "chromium",
+            "webkit",
+            "msedge"
+          ]
         }
       }
     }

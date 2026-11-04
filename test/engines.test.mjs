@@ -76,7 +76,7 @@ test('every WebKit gap names its check, what is missing and what flow-review doe
   assert.deepEqual(GAPS.chromium, []);
   assert.deepEqual(GAPS.msedge, []);
   for (const g of GAPS.webkit) for (const k of ['check', 'what', 'instead']) assert.ok(g[k]?.length > 10 || (k === 'check' && g[k]), JSON.stringify(g));
-  assert.deepEqual([...new Set(GAPS.webkit.map((g) => g.check))].sort(), ['cdp', 'cls', 'constrained', 'jank', 'keyboard']);
+  assert.deepEqual([...new Set(GAPS.webkit.map((g) => g.check))].sort(), ['cdp', 'cls', 'constrained', 'duoBytes', 'errors', 'jank', 'keyboard']);
 });
 
 test('a report keys results by engine and shows engines side by side', () => {

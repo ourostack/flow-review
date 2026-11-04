@@ -2,7 +2,9 @@
 // Safari and WKWebView run) fails the jank check there and passes it on Chromium; layout shifts and long tasks, which
 // WebKit has no performance entries for, are measured another way and agree with Chromium's; and an in-page meter on
 // rAF and event timeStamps (as the basics gate's) reads the same on both. Needs both browsers: CI's webkit job runs it
-// (FLOW_REVIEW_PARITY=1 with `npx playwright install chromium-headless-shell webkit`).
+// (FLOW_REVIEW_PARITY=1 with `npx playwright install chromium-headless-shell webkit`). On macOS runners, whose headless
+// Chromium has no GPU and drops frames of its own, FLOW_REVIEW_PARITY=webkit holds the WebKit side of the wheel tests
+// only; Linux holds Chromium's smooth baseline.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,6 +20,7 @@ import { validate } from '../lib/schema.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skip = process.env.FLOW_REVIEW_PARITY ? false : 'needs Chromium and WebKit: CI runs it with FLOW_REVIEW_PARITY=1';
 const ENGINES = ['chromium', 'webkit'];
+const WHEEL_ENGINES = process.env.FLOW_REVIEW_PARITY === 'webkit' ? ['webkit'] : ENGINES;
 const browsers = new Map();
 const browserFor = async (engine) => {
   if (!browsers.has(engine)) browsers.set(engine, await launchBrowser(playwright[browserTypeOf(engine)], launchOptionsFor(engine)));
@@ -39,37 +42,40 @@ async function pageOn(engine, html, { init = [], width = 800, height = 600 } = {
 const wheelHtml = fs.readFileSync(path.join(root, 'test/fixtures/wheel/index.html'), 'utf8');
 const meterJs = fs.readFileSync(path.join(root, 'test/fixtures/wheel/meter.js'), 'utf8');
 
+const out = path.join(root, '.scratch', 'engine-parity');
+after(() => fs.rmSync(out, { recursive: true, force: true }));
+
 test('a list that stalls each wheel only on WebKit fails jank on WebKit and passes it on Chromium', { skip, timeout: 180_000 }, () => {
-  const out = path.join(root, '.scratch', 'engine-parity');
   fs.rmSync(out, { recursive: true, force: true });
-  const r = spawnSync(process.execPath, ['bin/flow-review.mjs', 'run', 'test/fixtures/wheel/flows/wheel.flow.json', '--engine', 'chromium,webkit', '--out', out, '--fail-on', 'jank'], { cwd: root, encoding: 'utf8', env: { ...process.env, FLOW_REVIEW_WORKERS: '1' } });
+  const r = spawnSync(process.execPath, ['bin/flow-review.mjs', 'run', 'test/fixtures/wheel/flows/wheel.flow.json', '--engine', WHEEL_ENGINES.join(','), '--out', out, '--fail-on', 'jank'], { cwd: root, encoding: 'utf8', env: { ...process.env, FLOW_REVIEW_WORKERS: '1' } });
   assert.equal(r.status, 1, `WebKit's stall fails the run:\n${r.stderr}`);
   const report = JSON.parse(fs.readFileSync(path.join(out, 'report.json'), 'utf8'));
   const findings = fs.readFileSync(path.join(out, 'findings.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(validate('report', report), []);
   for (const f of findings) assert.deepEqual(validate('finding', f), [], JSON.stringify(f));
-  assert.deepEqual(report.units.map((u) => u.key), ['test/fixtures/wheel/flows/wheel.flow.json#800x600-light', 'test/fixtures/wheel/flows/wheel.flow.json#800x600-light@webkit']);
+  const key = 'test/fixtures/wheel/flows/wheel.flow.json#800x600-light';
+  assert.deepEqual(report.units.map((u) => u.key), WHEEL_ENGINES.map((e) => (e === 'chromium' ? key : `${key}@${e}`)));
   const jank = (engine) => findings.filter((f) => f.check === 'jank' && f.step === 'scrolled' && f.cell.engine === engine);
-  assert.ok(jank('chromium').every((f) => f.pass), `smooth on Chromium: ${JSON.stringify(jank('chromium'))}`);
-  assert.ok(jank('chromium').some((f) => f.measured.frames >= 20), 'enough frames on Chromium to judge');
   assert.ok(jank('webkit').some((f) => !f.pass && f.threshold === 0.1), `slow frames on WebKit: ${JSON.stringify(jank('webkit'))}`);
   assert.ok(jank('webkit').every((f) => f.method === 'timer, no raster split'), 'WebKit says how it measured');
-  assert.ok(jank('chromium').every((f) => f.method === 'longtask'));
-  assert.equal(findings.filter((f) => f.check === 'step' && !f.pass).length, 0, 'every step ran on both engines');
-  assert.equal(report.engines.chromium.failures, 0);
   assert.ok(report.engines.webkit.failures > 0);
   assert.ok(report.engines.webkit.gaps.length > 0);
+  assert.equal(findings.filter((f) => f.check === 'step' && !f.pass).length, 0, 'every step ran');
+  if (!WHEEL_ENGINES.includes('chromium')) return;
+  assert.ok(jank('chromium').every((f) => f.pass), `smooth on Chromium: ${JSON.stringify(jank('chromium'))}`);
+  assert.ok(jank('chromium').some((f) => f.measured.frames >= 20), 'enough frames on Chromium to judge');
+  assert.ok(jank('chromium').every((f) => f.method === 'longtask'));
+  assert.equal(report.engines.chromium.failures, 0);
   assert.ok(report.provenance.browsers.chromium && report.provenance.browsers.webkit, JSON.stringify(report.provenance.browsers));
   const md = fs.readFileSync(path.join(out, 'summary.md'), 'utf8');
   assert.match(md, /### By engine/);
   assert.match(md, /\| Wheel fixture: scroll a message list \| ✅ 1 units \| ❌ jank \d+ \|/);
-  fs.rmSync(out, { recursive: true, force: true });
 });
 
 test('an in-page meter on rAF and event timeStamps runs the same on both engines, and sees the WebKit-only dead input', { skip, timeout: 120_000 }, async () => {
   const { analyze } = (new Function(`${meterJs}; return globalThis.testMeter;`))();
   const results = {};
-  for (const engine of ENGINES) {
+  for (const engine of WHEEL_ENGINES) {
     const page = await pageOn(engine, wheelHtml, { init: [meterJs] });
     await page.evaluate(() => window.__testMeter.start('[data-list]'));
     const box = await page.locator('[data-list]').boundingBox();
@@ -87,7 +93,7 @@ test('an in-page meter on rAF and event timeStamps runs the same on both engines
     results[engine] = analyze(rec.frames, rec.inputs);
     await page.context().close();
   }
-  assert.equal(results.chromium.deadInput, 0, `Chromium moves on every wheel: ${JSON.stringify(results.chromium)}`);
+  if (results.chromium) assert.equal(results.chromium.deadInput, 0, `Chromium moves on every wheel: ${JSON.stringify(results.chromium)}`);
   assert.ok(results.webkit.deadInput >= 3, `WebKit's wheels wait on the list: ${JSON.stringify(results.webkit)}`);
   assert.ok(results.webkit.maxMs >= 100, JSON.stringify(results.webkit));
 });
