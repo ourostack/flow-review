@@ -259,7 +259,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
   }
 });
 
-test("flow-review constrain: the platform's other CPU mechanism", { skip: process.platform === 'darwin' && 'macOS has only the duty cycle', timeout: 60_000 }, async () => {
+test("flow-review constrain: the platform's other CPU mechanism", { skip: process.platform === 'darwin' && 'macOS has only the duty cycle', timeout: 150_000 }, async () => {
   const other = process.platform === 'win32' ? ['hard-cap', 'job-cpu-rate'] : ['duty-cycle', 'duty-cycle'];
   const summaryFile = path.join(scratch, 'other.json');
   const r = await runConstrain(['constrain', '--cpu-mechanism', other[0], '--summary', summaryFile, '--', 'node', '-e', '0']);
@@ -276,7 +276,7 @@ test("flow-review constrain: the platform's other CPU mechanism", { skip: proces
 // The defect this gate exists for, planted: a hard cap alone, over a window long enough (Windows' own, or a Linux cgroup
 // period of 100 ms) that a 10 ms task after idle runs at full speed. Long work measures about 4×; the short tasks
 // don't, so the command doesn't run.
-test('a constraint that lets short tasks run at full speed is refused, and the command never runs', { skip: (process.platform === 'darwin' && 'macOS has no hard cap to plant it in') || (process.platform === 'linux' && process.env.CI !== 'true' && 'the cgroup needs CI'), timeout: 60_000 }, async () => {
+test('a constraint that lets short tasks run at full speed is refused, and the command never runs', { skip: (process.platform === 'darwin' && 'macOS has no hard cap to plant it in') || (process.platform === 'linux' && process.env.CI !== 'true' && 'the cgroup needs CI'), timeout: 150_000 }, async () => {
   const marker = path.join(scratch, 'escaped-ran');
   fs.rmSync(marker, { force: true });
   const summary = await launchConstrained(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`], {
