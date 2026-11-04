@@ -56,6 +56,7 @@ test('a measurement takes three pairs, more while they scatter, and at most nine
   assert.equal(enoughPairs([4, 4.02], { precision }), false, 'never fewer than three');
   assert.equal(enoughPairs([4, 4.02, 3.98], { precision }), true, 'three that agree are enough');
   assert.equal(enoughPairs([3, 4, 5.5], { precision }), false, 'three that scatter are not');
+  assert.equal(enoughPairs([3, 4, 4.05], { precision }), false, 'nor three of which two agree and one is far off');
   assert.equal(enoughPairs([3, 4, 5.5, 3.1, 6, 2.8, 4.4, 5, 3.3], { precision }), true, 'nine is the most');
 });
 
