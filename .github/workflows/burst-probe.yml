@@ -7,7 +7,7 @@ permissions:
 jobs:
   probe:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -16,8 +16,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+          path: before
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npm ci --no-audit --no-fund
+      - run: node test/constrain/burst-probe.mjs before before/lib/constrain.mjs
       - run: node test/constrain/burst-probe.mjs
+      - if: runner.os == 'Windows'
+        shell: bash
+        run: FLOW_REVIEW_PROBE_SLEEP_TIMER=1 PROBE_TAG=-sleeptimer node test/constrain/burst-probe.mjs
+      - if: runner.os == 'macOS'
+        run: |
+          node test/constrain/burst-probe.mjs sleep
+          taskpolicy 2>&1 | head -5 || true
+          PROBE_TAG=-tier0 taskpolicy -l 0 -t 0 node test/constrain/burst-probe.mjs sleep || true
+          PROBE_TAG=-tier0 taskpolicy -l 0 -t 0 node test/constrain/burst-probe.mjs || true

@@ -148,11 +148,13 @@ public static class FlowReviewJob {
   static void Duty(IntPtr job) {
     // Opts this process out of Windows 11's power throttling, which slows a windowless process's timers and may put it
     // on efficiency cores: the beat has to keep time.
+    if (!probeSleep) {
     PowerThrottling pt = new PowerThrottling(); pt.Version = 1; pt.ControlMask = POWER_THROTTLING_EXECUTION_SPEED | POWER_THROTTLING_IGNORE_TIMER_RESOLUTION; pt.StateMask = 0;
     SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref pt, (uint)Marshal.SizeOf(typeof(PowerThrottling)));
     timeBeginPeriod(1);
     timer = CreateWaitableTimerExW(IntPtr.Zero, IntPtr.Zero, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     if (timer != IntPtr.Zero) timerKind = "high-resolution";
+    }
     Stopwatch clock = Stopwatch.StartNew();
     double factor = dutyRatio;
     double on = clock.Elapsed.TotalMilliseconds;
@@ -174,6 +176,7 @@ public static class FlowReviewJob {
     if (timer != IntPtr.Zero) { CloseHandle(timer); timer = IntPtr.Zero; }
   }
 
+  public static bool probeSleep = false;
   public static int Serve(long cpuRate, long memoryBytes) {
     IntPtr job = CreateJobObject(IntPtr.Zero, null);
     if (job == IntPtr.Zero) { Say("{\"error\":\"CreateJobObject failed with error " + Marshal.GetLastWin32Error() + "\"}"); return 1; }
@@ -236,4 +239,5 @@ public static class FlowReviewJob {
   }
 }
 '@
+[FlowReviewJob]::probeSleep = [bool]$env:FLOW_REVIEW_PROBE_SLEEP_TIMER
 exit [FlowReviewJob]::Serve($CpuRate, $MemoryBytes)
