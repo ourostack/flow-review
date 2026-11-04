@@ -149,9 +149,13 @@ public static class FlowReviewJob {
   }
 
   // A run or a pause, cut short by a hold or the end of the cycle, so a hold is taken up within 20 ms whatever the period.
+  // What is left under a millisecond after a sleep is left to the account, as one sleep would leave it.
   static void Nap(Stopwatch clock, double ms) {
     double end = clock.Elapsed.TotalMilliseconds + ms;
-    for (double left = ms; left > 0 && dutyOn && Thread.VolatileRead(ref dutyRatio) > 1; left = end - clock.Elapsed.TotalMilliseconds) Sleep(Math.Min(left, 20));
+    for (double left = ms; left > 0 && dutyOn && Thread.VolatileRead(ref dutyRatio) > 1; left = end - clock.Elapsed.TotalMilliseconds) {
+      Sleep(Math.Min(left, 20));
+      if (end - clock.Elapsed.TotalMilliseconds < 1) return;
+    }
   }
 
   static void Duty(IntPtr job) {
