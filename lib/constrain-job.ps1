@@ -37,6 +37,12 @@ public static class FlowReviewJob {
   [DllImport("ntdll.dll")] static extern int NtSuspendProcess(IntPtr process);
   [DllImport("ntdll.dll")] static extern int NtResumeProcess(IntPtr process);
   [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint milliseconds);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateWaitableTimerExW(IntPtr attributes, IntPtr name, uint flags, uint access);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetWaitableTimer(IntPtr timer, ref long due, int period, IntPtr completion, IntPtr arg, bool resume);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr GetCurrentProcess();
+  [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetProcessInformation(IntPtr process, int infoClass, ref PowerThrottling info, uint size);
+  [StructLayout(LayoutKind.Sequential)] struct PowerThrottling { public uint Version; public uint ControlMask; public uint StateMask; }
 
   const int BasicAccountingInformation = 1, BasicProcessIdList = 3, AssociateCompletionPortInformation = 7, ExtendedLimitInformation = 9, CpuRateControlInformation = 15;
   const uint PROCESS_SUSPEND_RESUME = 0x800, PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
@@ -88,7 +94,7 @@ public static class FlowReviewJob {
   // The duty cycle: every process in the job suspended and resumed in turn, so each thread runs 1/ratio of the time.
   static volatile bool dutyOn;
   static double dutyRatio = 1;
-  static int dutyPeriod = 50;
+  static double dutyPeriod = 10;
   static double dutyRan, dutyPaused;
   static int dutyCycles;
   static Thread dutyThread;
@@ -121,10 +127,32 @@ public static class FlowReviewJob {
     }
   }
 
-  static void Sleep(double ms) { if (ms >= 1) Thread.Sleep((int)Math.Round(ms)); }
+  // The duty cycle's sleeps. A high-resolution waitable timer wakes within a fraction of a millisecond whatever the
+  // system's timer resolution; Thread.Sleep wakes on the timer's tick, which Windows 11 keeps at 15.6 ms for a process
+  // without a visible window (as this one) even when it asks for 1 ms, and a cycle that coarse lets a short task run
+  // through a whole slice at full speed. Thread.Sleep is the fallback where the timer can't be made (before Windows 10 1803).
+  const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x2, TIMER_ALL_ACCESS = 0x1F0003;
+  const int ProcessPowerThrottling = 4;
+  const uint POWER_THROTTLING_EXECUTION_SPEED = 0x1, POWER_THROTTLING_IGNORE_TIMER_RESOLUTION = 0x4;
+  static IntPtr timer = IntPtr.Zero;
+  static string timerKind = "sleep";
+  static void Sleep(double ms) {
+    if (ms <= 0) return;
+    if (timer != IntPtr.Zero) {
+      long due = -(long)Math.Round(ms * 10000);
+      if (due < 0 && SetWaitableTimer(timer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false)) { WaitForSingleObject(timer, 0xFFFFFFFF); return; }
+    }
+    if (ms >= 1) Thread.Sleep((int)Math.Round(ms));
+  }
 
   static void Duty(IntPtr job) {
+    // Opts this process out of Windows 11's power throttling, which slows a windowless process's timers and may put it
+    // on efficiency cores: the beat has to keep time.
+    PowerThrottling pt = new PowerThrottling(); pt.Version = 1; pt.ControlMask = POWER_THROTTLING_EXECUTION_SPEED | POWER_THROTTLING_IGNORE_TIMER_RESOLUTION; pt.StateMask = 0;
+    SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref pt, (uint)Marshal.SizeOf(typeof(PowerThrottling)));
     timeBeginPeriod(1);
+    timer = CreateWaitableTimerExW(IntPtr.Zero, IntPtr.Zero, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    if (timer != IntPtr.Zero) timerKind = "high-resolution";
     Stopwatch clock = Stopwatch.StartNew();
     double factor = dutyRatio;
     double on = clock.Elapsed.TotalMilliseconds;
@@ -143,6 +171,7 @@ public static class FlowReviewJob {
       dutyCycles++;
     }
     All(job, false);
+    if (timer != IntPtr.Zero) { CloseHandle(timer); timer = IntPtr.Zero; }
   }
 
   public static int Serve(long cpuRate, long memoryBytes) {
@@ -176,7 +205,7 @@ public static class FlowReviewJob {
       } else if (line.StartsWith("duty ")) {
         string[] parts = line.Split(' ');
         dutyRatio = double.Parse(parts[1], CultureInfo.InvariantCulture);
-        dutyPeriod = int.Parse(parts[2], CultureInfo.InvariantCulture);
+        dutyPeriod = double.Parse(parts[2], CultureInfo.InvariantCulture);
         dutyOn = true;
         IntPtr j = job;
         dutyThread = new Thread(delegate () { Duty(j); });
@@ -198,8 +227,8 @@ public static class FlowReviewJob {
     }
     ExtendedLimit e2 = Get<ExtendedLimit>(job, ExtendedLimitInformation);
     Accounting a = Get<Accounting>(job, BasicAccountingInformation);
-    Say(string.Format(CultureInfo.InvariantCulture, "{{\"peakJobMemory\":{0},\"peakProcessMemory\":{1},\"memoryLimitHits\":{2},\"cpuSeconds\":{3},\"processes\":{4},\"leftRunning\":{5},\"dutyRanMs\":{6},\"dutyPausedMs\":{7},\"dutyCycles\":{8}}}",
-      e2.PeakJobMemoryUsed.ToUInt64(), e2.PeakProcessMemoryUsed.ToUInt64(), memoryHits, (a.TotalUserTime + a.TotalKernelTime) / 1e7, a.TotalProcesses, a.ActiveProcesses, Math.Round(dutyRan), Math.Round(dutyPaused), dutyCycles));
+    Say(string.Format(CultureInfo.InvariantCulture, "{{\"peakJobMemory\":{0},\"peakProcessMemory\":{1},\"memoryLimitHits\":{2},\"cpuSeconds\":{3},\"processes\":{4},\"leftRunning\":{5},\"dutyRanMs\":{6},\"dutyPausedMs\":{7},\"dutyCycles\":{8},\"dutyTimer\":\"{9}\"}}",
+      e2.PeakJobMemoryUsed.ToUInt64(), e2.PeakProcessMemoryUsed.ToUInt64(), memoryHits, (a.TotalUserTime + a.TotalKernelTime) / 1e7, a.TotalProcesses, a.ActiveProcesses, Math.Round(dutyRan), Math.Round(dutyPaused), dutyCycles, timerKind));
     foreach (IntPtr h in handles.Values) if (h != IntPtr.Zero) CloseHandle(h);
     CloseHandle(job);
     CloseHandle(port);
