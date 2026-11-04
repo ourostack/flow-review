@@ -50,6 +50,7 @@ jobs:
         run: npx playwright install --only-shell chromium
       # WebKit's system libraries aren't in the cache: they're installed every time.
       - if: matrix.engine == 'webkit'
+        timeout-minutes: 5
         run: npx playwright install --with-deps webkit
       # The constrained-computer tests measure speed, so they run alone, on each platform, in the constrain job.
       - run: node --test test/*.test.mjs
