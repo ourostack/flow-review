@@ -13,7 +13,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { resolveSettings, constrainedFromEnv, bannerLine, PROFILES, CONSTRAINED_ENV } from '../../lib/constrain-profile.mjs';
-import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv, sandboxedHost } from '../../lib/constrain.mjs';
+import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv, sandboxedHost, launchConstrained } from '../../lib/constrain.mjs';
 import { startDelayProxy } from '../../lib/constrain-proxy.mjs';
 import { constrainPage, constrainCdp } from '../../lib/constrain-cdp.mjs';
 import { baseline, within } from '../../lib/constrain-calibrate.mjs';
@@ -34,6 +34,19 @@ const run = (args, env = {}) => new Promise((resolve) => {
   p.stderr.on('data', (d) => { stderr += d; });
   p.on('close', (status) => resolve({ status, stdout, stderr }));
 });
+// GitHub's macOS runners are virtual machines on which the share a stopped-and-continued process gets swings from run to
+// run (2× to 9× at fixed settings within a minute), so flow-review constrain refuses there more often (exit 4). A refused
+// run is tried again, up to three in all, and each refusal is logged: what these tests prove is that a run that goes
+// ahead was measured within tolerance on long work and on short tasks, never that one was let through outside it.
+const runConstrain = async (args, env) => {
+  let r;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    r = await run(args, env);
+    if (r.status !== 4) break;
+    console.log(`refused (exit 4), attempt ${attempt}: ${r.stderr.match(/ERROR [^\n]*/)?.[0] ?? r.stderr.trim()}`);
+  }
+  return r;
+};
 const serve = (body) => new Promise((resolve) => {
   const server = http.createServer((req, res) => { res.setHeader('cache-control', 'no-store'); res.setHeader('access-control-allow-origin', '*'); res.end(body); }).listen(0, '127.0.0.1', () => resolve(server));
 });
@@ -219,7 +232,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     // isn't taken for the baseline.
     const plainGrandchildMs = () => JSON.parse(spawnSync(process.execPath, [fixture('tree.mjs'), String(iterations)], { encoding: 'utf8', env: { ...process.env, [CONSTRAINED_ENV]: '' } }).stdout.split('TREE ')[1].split('\n')[0]).grandchildMs;
     const plain = [plainGrandchildMs()];
-    const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
+    const r = await runConstrain(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stderr, /CONSTRAINED COMPUTER \(old-windows-laptop\): CPU 4× slower \(measured [\d.]+×, 10 ms tasks [\d.]+×, (job-duty-cycle|cgroup-cpu-max|duty-cycle)\)/, 'a banner before');
     assert.match(r.stderr, /CONSTRAINED COMPUTER [^\n]*: exit 0; no caps hit/, 'and after');
@@ -230,6 +243,9 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     console.log(`constrain on ${summary.platform} (${summary.cpu.cpus} CPUs): ${describe(summary)}; memory ${summary.memory.mechanism} (${summary.memory.enforcement}), peak ${summary.memory.peakMB} MB`);
     assert.equal(summary.cpu.within, true);
     assert.ok(summary.cpu.achieved >= 3 && summary.cpu.achieved <= 5, `measured ${summary.cpu.achieved}×`);
+    assert.equal(summary.cpu.burst.within, true);
+    assert.ok(summary.cpu.burst.achieved >= 3 && summary.cpu.burst.achieved <= 5, `10 ms tasks measured ${summary.cpu.burst.achieved}×`);
+    assert.equal(summary.cpu.dutyCycle, true, 'every CPU mechanism has a duty cycle, so short tasks are slowed from their start');
     assert.equal(summary.ok, true);
     assert.deepEqual(summary.capsHit, []);
     const tree = JSON.parse(r.stdout.split('TREE ')[1].split('\n')[0]);
@@ -240,6 +256,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.ok(ratio >= 2.8 && ratio <= 5.5, `a grandchild ran ${ratio.toFixed(2)}× slower, not about 4×`);
     assert.equal(tree.env.profile, 'old-windows-laptop');
     assert.equal(tree.env.tree.achieved, summary.cpu.achieved, 'the harness learns the measured factor');
+    assert.equal(tree.env.tree.burst, summary.cpu.burst.achieved, 'and the short tasks\' factor');
     assert.equal(tree.proxy, summary.network.proxy);
     assert.ok(tree.requestMs >= 145, `a request through the run's proxy took ${tree.requestMs.toFixed(0)} ms, under 150 ms`);
     assert.ok(tree.statMs >= 19, `5 stats took ${tree.statMs.toFixed(0)} ms, under 5 × 4 ms`);
@@ -252,13 +269,35 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
 test("flow-review constrain: the platform's other CPU mechanism", { skip: process.platform === 'darwin' && 'macOS has only the duty cycle', timeout: 60_000 }, async () => {
   const other = process.platform === 'win32' ? ['hard-cap', 'job-cpu-rate'] : ['duty-cycle', 'duty-cycle'];
   const summaryFile = path.join(scratch, 'other.json');
-  const r = await run(['constrain', '--cpu-mechanism', other[0], '--summary', summaryFile, '--', 'node', '-e', '0']);
+  const r = await runConstrain(['constrain', '--cpu-mechanism', other[0], '--summary', summaryFile, '--', 'node', '-e', '0']);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   console.log(`${other[0]} on ${summary.platform}: ${describe(summary)}`);
   assert.equal(summary.cpu.mechanism, other[1]);
   if (process.platform === 'linux') assert.equal(summary.cpu.quota ?? null, null, 'under the duty cycle a cgroup holds memory only, never a CPU cap as well');
   assert.equal(r.status, 0, r.stderr);
   assert.equal(summary.cpu.within, true);
+  assert.equal(summary.cpu.burst.within, true, `10 ms tasks measured ${summary.cpu.burst.achieved}×`);
+  assert.equal(summary.cpu.dutyCycle, true);
+});
+
+// The defect this gate exists for, planted: a hard cap alone, over a window long enough (Windows' own, or a Linux cgroup
+// period of 100 ms) that a 10 ms task after idle runs at full speed. Long work measures about 4×; the short tasks
+// don't, so the command doesn't run.
+test('a constraint that lets short tasks run at full speed is refused, and the command never runs', { skip: (process.platform === 'darwin' && 'macOS has no hard cap to plant it in') || (process.platform === 'linux' && process.env.CI !== 'true' && 'the cgroup needs CI'), timeout: 60_000 }, async () => {
+  const marker = path.join(scratch, 'escaped-ran');
+  fs.rmSync(marker, { force: true });
+  const summary = await launchConstrained(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`], {
+    cpuMechanism: 'hard-cap', capDuty: false, cgroupPeriodUs: 100_000, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null,
+  }).done;
+  console.log(`a hard cap alone on ${summary.platform}: ${describe(summary)}`);
+  assert.equal(summary.cpu.dutyCycle, false);
+  assert.ok(summary.cpu.burst.achieved < 3, `10 ms tasks measured ${summary.cpu.burst.achieved}×, not let through`);
+  assert.equal(summary.cpu.burst.within, false);
+  assert.equal(summary.cpu.within, false);
+  assert.match(summary.error, /on 10 ms tasks, outside 4× ±25%: the command didn't run/);
+  assert.equal(summary.ok, false);
+  assert.equal(summary.exitCode, null);
+  assert.equal(fs.existsSync(marker), false, 'the command never ran');
 });
 
 test('flow-review constrain: the memory cap is enforced, or detected where it can only be', { timeout: 120_000 }, async () => {
@@ -335,7 +374,8 @@ test('flow-review constrain kills what the command left running when it exits', 
   const pidsFile = path.join(scratch, 'left-exit.json');
   const summaryFile = path.join(scratch, 'left-exit-summary.json');
   fs.rmSync(pidsFile, { force: true });
-  const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
+  // About what is killed, not the factor: a wide tolerance, so a noisy host's measurement doesn't stop the command running.
+  const r = await runConstrain(['constrain', '--tolerance', '0.99', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
   assert.equal(r.status, 0, r.stderr);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   assert.deepEqual(validate('constrained', summary), []);
@@ -383,10 +423,14 @@ test('a harness killed by a signal while launchConstrained runs leaves nothing r
   const pidsFile = path.join(scratch, 'left-signal.json');
   fs.rmSync(pidsFile, { force: true });
   const lib = pathToFileURL(path.join(root, 'lib', 'constrain.mjs')).href;
-  // The duty cycle, so the tree is stopped three quarters of the time when the signal lands.
+  // The duty cycle, so the tree is stopped three quarters of the time when the signal lands; a wide tolerance, as the test
+  // is about what the signal leaves behind, not the factor.
   const script = `import { launchConstrained } from ${JSON.stringify(lib)};
-const run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
-await run.ready;
+let run;
+for (let attempt = 1; attempt <= 3; attempt++) {
+  run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', tolerance: 0.99, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
+  try { await run.ready; break; } catch (e) { if (attempt === 3 || !/outside/.test(e.message)) throw e; await run.done; }
+}
 console.log('READY');
 await run.done;`;
   const harness = spawn(process.execPath, ['--input-type=module', '-e', script], { cwd: root, env: { ...process.env, [CONSTRAINED_ENV]: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
