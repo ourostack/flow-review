@@ -166,8 +166,9 @@ test('cls', async () => {
   await good.context().close();
   const bad = await pageWith(late);
   await bad.waitForTimeout(600);
-  const [f] = failing(await checks.cls(bad));
-  assert.ok(f.measured > 0.1, JSON.stringify(f));
+  const all = await checks.cls(bad);
+  const [f] = failing(all);
+  assert.ok(f?.measured > 0.1, JSON.stringify(all));
   await bad.context().close();
 });
 

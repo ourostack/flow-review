@@ -110,7 +110,8 @@ jobs:
   # Chromium and WebKit, as a product's flow review runs on the engines it ships to.
   action:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # WebKit's system libraries come from the Ubuntu mirror each time: usually 30 s, sometimes minutes.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

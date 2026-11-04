@@ -22,7 +22,7 @@
   fetch('data.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))).then((d) => {
     if (!d.items.length) list.outerHTML = '<p role="status">Nothing here yet. Items you add show up in this list.</p>';
     else for (const i of d.items) list.insertAdjacentHTML('beforeend', '<li>' + i + '</li>');
-  }).catch((e) => { list.outerHTML = q.has('raw') ? '<p>' + e.stack + '</p>' : '<p role="alert"><span data-moment="error" aria-hidden="true">(art)</span> The items could not load. Try again in a minute.</p>'; });
+  }).catch((e) => { list.outerHTML = q.has('raw') ? '<p>' + e + ' ' + e.stack + '</p>' : '<p role="alert"><span data-moment="error" aria-hidden="true">(art)</span> The items could not load. Try again in a minute.</p>'; });
   const d = document.getElementById('d');
   document.getElementById('open').onclick = () => d.showModal();
   document.getElementById('close').onclick = () => d.close();
