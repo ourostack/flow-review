@@ -1,0 +1,37 @@
+{
+  "name": "@ourostack/flow-review",
+  "version": "0.5.3",
+  "description": "Deterministic flow review: run declared user and agent flows across a matrix and measure accessibility, layout, motion and agent-contract checks, with JSON output and cropped evidence.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ourostack/flow-review.git"
+  },
+  "homepage": "https://github.com/ourostack/flow-review#readme",
+  "bugs": {
+    "url": "https://github.com/ourostack/flow-review/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "flow-review": "bin/flow-review.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.mjs"
+    }
+  },
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "test": "node --test test/*.test.mjs && npm run test:constrain",
+    "test:constrain": "node --test --test-concurrency=1 test/constrain/*.test.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "ajv": "8.20.0",
+    "playwright": "1.64.1"
+  }
+}
