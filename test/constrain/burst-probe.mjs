@@ -11,8 +11,11 @@ const pct = (xs, p) => [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) 
 if (mode === 'sleep') {
   // How long Atomics.wait in a worker really sleeps, as the duty cycle's beat does.
   const code = `const { parentPort } = require('node:worker_threads'); const s = new Int32Array(new SharedArrayBuffer(4)); const out = {};
+(async () => {
 for (const ms of [0.5, 1, 2.5, 7.5]) { const xs = []; for (let i = 0; i < 300; i++) { const t = performance.now(); Atomics.wait(s, 0, 0, ms); xs.push(performance.now() - t - ms); } out[ms] = xs; }
-parentPort.postMessage(out);`;
+for (const ms of [1, 2, 7]) { const xs = []; for (let i = 0; i < 200; i++) { const t = performance.now(); await new Promise((r) => setTimeout(r, ms)); xs.push(performance.now() - t - ms); } out['setTimeout ' + ms] = xs; }
+parentPort.postMessage(out);
+})();`;
   const out = await new Promise((r) => new Worker(code, { eval: true }).once('message', r));
   for (const [ms, xs] of Object.entries(out)) console.log(`SLEEP ${tag} ${process.platform} wait ${ms} ms: oversleep p50 ${pct(xs, 0.5).toFixed(2)} p90 ${pct(xs, 0.9).toFixed(2)} p99 ${pct(xs, 0.99).toFixed(2)} max ${Math.max(...xs).toFixed(2)}`);
   process.exit(0);
@@ -23,9 +26,9 @@ const { launchConstrained } = await import(lib);
 const configs = mode === 'before'
   ? (process.platform === 'darwin' ? [{ cpuMechanism: 'auto' }] : [{ cpuMechanism: 'auto' }, { cpuMechanism: process.platform === 'win32' ? 'hard-cap' : 'duty-cycle' }])
   : {
-    linux: [{ cpuMechanism: 'hard-cap', cgroupPeriodUs: 10000 }, { cpuMechanism: 'hard-cap', cgroupPeriodUs: 4000 }, { cpuMechanism: 'duty-cycle', periodMs: 10 }, { cpuMechanism: 'duty-cycle', periodMs: 4 }, { cpuMechanism: 'duty-cycle', periodMs: 2 }],
-    darwin: [{ cpuMechanism: 'duty-cycle', periodMs: 10 }, { cpuMechanism: 'duty-cycle', periodMs: 4 }, { cpuMechanism: 'duty-cycle', periodMs: 2 }, { cpuMechanism: 'duty-cycle', periodMs: 1 }],
-    win32: [{ cpuMechanism: 'duty-cycle', periodMs: 10 }, { cpuMechanism: 'duty-cycle', periodMs: 4 }, { cpuMechanism: 'hard-cap', capDuty: true, periodMs: 4 }],
+    linux: [{ cpuMechanism: 'hard-cap', cgroupPeriodUs: 10000 }, { cpuMechanism: 'hard-cap', cgroupPeriodUs: 100000 }, { cpuMechanism: 'hard-cap', cgroupPeriodUs: 100000, periodMs: 4 }],
+    darwin: [{ cpuMechanism: 'duty-cycle', periodMs: 10 }, { cpuMechanism: 'duty-cycle', periodMs: 4 }, { cpuMechanism: 'duty-cycle', periodMs: 2 }],
+    win32: [{ cpuMechanism: 'auto' }, { cpuMechanism: 'hard-cap' }],
   }[process.platform];
 for (const c of configs) {
   for (let k = 0; k < 3; k++) {
