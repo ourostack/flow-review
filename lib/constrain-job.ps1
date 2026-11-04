@@ -4,7 +4,7 @@
 #   assign <pid>             puts a process in the job (its later children are in it from birth)
 #   rate <n>                 sets the hard cap to n cycles in 10,000 across all processors
 #   duty <ratio> <periodMs>  starts the duty cycle: run 1/ratio of every period
-#   ratio <r>                changes the duty cycle's ratio
+#   ratio <r>                changes the duty cycle's ratio; 1 or less holds it with every process running
 #   report                   prints the job's peak memory, memory-limit hits, CPU time and the duty cycle's account,
 #                            then closes the job, which ends anything still running in it
 param([long]$CpuRate = 0, [long]$MemoryBytes = 0)
@@ -93,6 +93,9 @@ public static class FlowReviewJob {
 
   // The duty cycle: every process in the job suspended and resumed in turn, so each thread runs 1/ratio of the time.
   static volatile bool dutyOn;
+  // Set by the duty thread while a ratio of 1 or less holds it with every process running, for the calibration's
+  // unconstrained timings.
+  static volatile bool dutyHeld;
   static double dutyRatio = 1;
   static double dutyPeriod = 10;
   static double dutyRan, dutyPaused;
@@ -157,6 +160,10 @@ public static class FlowReviewJob {
     double factor = dutyRatio;
     double on = clock.Elapsed.TotalMilliseconds;
     while (dutyOn) {
+      double now = Thread.VolatileRead(ref dutyRatio);
+      if (now <= 1) { dutyHeld = true; Sleep(1); factor = 1; continue; }
+      // A cycle after a hold starts its own account, from a run that starts now.
+      if (factor <= 1) { factor = now; dutyRan = 0; dutyPaused = 0; on = clock.Elapsed.TotalMilliseconds; dutyHeld = false; }
       Sleep(dutyPeriod / factor);
       All(job, true);
       double off = clock.Elapsed.TotalMilliseconds;
@@ -215,7 +222,11 @@ public static class FlowReviewJob {
         Say("{\"duty\":" + dutyRatio.ToString(CultureInfo.InvariantCulture) + "}");
       } else if (line.StartsWith("ratio ")) {
         dutyRatio = double.Parse(line.Substring(6), CultureInfo.InvariantCulture);
-        Say("{\"ratio\":" + dutyRatio.ToString(CultureInfo.InvariantCulture) + "}");
+        // A hold, or the end of one, is answered once the duty thread has taken it up (within 2 s).
+        bool hold = dutyRatio <= 1;
+        Stopwatch waited = Stopwatch.StartNew();
+        while (dutyThread != null && dutyThread.IsAlive && dutyHeld != hold && waited.ElapsedMilliseconds < 2000) Thread.Sleep(1);
+        Say("{\"ratio\":" + dutyRatio.ToString(CultureInfo.InvariantCulture) + ",\"held\":" + (dutyHeld ? "true" : "false") + "}");
       } else if (line == "report") break;
     }
     if (dutyThread != null) { dutyOn = false; dutyThread.Join(); }
