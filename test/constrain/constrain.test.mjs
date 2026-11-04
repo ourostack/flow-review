@@ -374,7 +374,8 @@ test('flow-review constrain kills what the command left running when it exits', 
   const pidsFile = path.join(scratch, 'left-exit.json');
   const summaryFile = path.join(scratch, 'left-exit-summary.json');
   fs.rmSync(pidsFile, { force: true });
-  const r = await runConstrain(['constrain', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
+  // About what is killed, not the factor: a wide tolerance, so a noisy host's measurement doesn't stop the command running.
+  const r = await runConstrain(['constrain', '--tolerance', '0.99', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
   assert.equal(r.status, 0, r.stderr);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   assert.deepEqual(validate('constrained', summary), []);
@@ -422,11 +423,12 @@ test('a harness killed by a signal while launchConstrained runs leaves nothing r
   const pidsFile = path.join(scratch, 'left-signal.json');
   fs.rmSync(pidsFile, { force: true });
   const lib = pathToFileURL(path.join(root, 'lib', 'constrain.mjs')).href;
-  // The duty cycle, so the tree is stopped three quarters of the time when the signal lands.
+  // The duty cycle, so the tree is stopped three quarters of the time when the signal lands; a wide tolerance, as the test
+  // is about what the signal leaves behind, not the factor.
   const script = `import { launchConstrained } from ${JSON.stringify(lib)};
 let run;
 for (let attempt = 1; attempt <= 3; attempt++) {
-  run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
+  run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', tolerance: 0.99, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
   try { await run.ready; break; } catch (e) { if (attempt === 3 || !/outside/.test(e.message)) throw e; await run.done; }
 }
 console.log('READY');
