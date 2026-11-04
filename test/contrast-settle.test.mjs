@@ -14,12 +14,15 @@ const PAGE = `<style>@keyframes spin { to { rotate: 1turn } } .spin { animation:
     <p id="words" style="color:#222">Words that fade in as they arrive.</p>
     <p id="faint" style="color:#949494">Words that are faint at rest.</p>
   </div>
+  <div id="host"></div>
   <div class="spin" aria-hidden="true"></div>
 </main>
 <script>
-  const pane = document.getElementById('pane');
-  // The pane fades in from 30%, as an entrance does: by Web Animations or by a CSS transition.
+  const shadow = document.getElementById('host').attachShadow({ mode: 'open' });
+  shadow.innerHTML = '<div id="deep"><p style="color:#222">Words in a shadow root that fade in too.</p></div>';
+  // A pane fades in from 30%, as an entrance does: by Web Animations or by a CSS transition, in the page or a shadow root.
   window.fade = (how, ms) => {
+    const pane = how === 'shadow' ? shadow.getElementById('deep') : document.getElementById('pane');
     if (how === 'animate') return void pane.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' });
     pane.style.transition = 'none';
     pane.style.opacity = '0.3';
@@ -45,6 +48,8 @@ const TIMINGS = {
   'a fade starts mid-measurement': (page) => page.evaluate(() => window.fadeWhenRead('animate', 400)),
   'a transition starts mid-measurement': (page) => page.evaluate(() => window.fadeWhenRead('transition', 400)),
   'a short fade starts and ends mid-measurement': (page) => page.evaluate(() => window.fadeWhenRead('animate', 20)),
+  'a transition in a shadow root just started': (page) => page.evaluate(() => window.fade('shadow', 400)),
+  'a transition in a shadow root starts mid-measurement': (page) => page.evaluate(() => window.fadeWhenRead('shadow', 400)),
 };
 
 const text = (findings) => failing(findings).filter((f) => /^text /.test(f.label)).map((f) => `${f.selector} ${f.measured}`).sort();
