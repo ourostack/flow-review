@@ -95,7 +95,9 @@ the app never feels the pressure of being near it.
 
 **CPU.** `flow-review constrain` starts a small gate process, sizes a fixed loop in it, puts it under the constraint
 and times the loop in adjacent pairs: once with the constraint lifted (the duty cycle held with the tree running, a
-hard cap set to no limit), then once under it, three pairs a measurement. The median of the pairs' factors is the
+hard cap set to no limit), then once under it, three pairs a measurement. Each lift is answered once it has taken
+effect (within 20 ms, as the duty cycle's runs and pauses are cut short for it), and one not answered within 2 s fails
+the run. The median of the pairs' factors is the
 slowdown achieved on long work. Both halves of a pair run on the computer as it is at that moment, so a runner that
 slows down for a while (another virtual machine on its host, its own background work) slows both and isn't taken for
 the constraint; one baseline taken before the constraint and compared with every later reading took it for exactly

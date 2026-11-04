@@ -148,6 +148,12 @@ public static class FlowReviewJob {
     if (ms >= 1) Thread.Sleep((int)Math.Round(ms));
   }
 
+  // A run or a pause, cut short by a hold or the end of the cycle, so a hold is taken up within 20 ms whatever the period.
+  static void Nap(Stopwatch clock, double ms) {
+    double end = clock.Elapsed.TotalMilliseconds + ms;
+    for (double left = ms; left > 0 && dutyOn && Thread.VolatileRead(ref dutyRatio) > 1; left = end - clock.Elapsed.TotalMilliseconds) Sleep(Math.Min(left, 20));
+  }
+
   static void Duty(IntPtr job) {
     // Opts this process out of Windows 11's power throttling, which slows a windowless process's timers and may put it
     // on efficiency cores: the beat has to keep time.
@@ -164,14 +170,14 @@ public static class FlowReviewJob {
       if (now <= 1) { dutyHeld = true; Sleep(1); factor = 1; continue; }
       // A cycle after a hold starts its own account, from a run that starts now.
       if (factor <= 1) { factor = now; dutyRan = 0; dutyPaused = 0; on = clock.Elapsed.TotalMilliseconds; dutyHeld = false; }
-      Sleep(dutyPeriod / factor);
+      Nap(clock, dutyPeriod / factor);
       All(job, true);
       double off = clock.Elapsed.TotalMilliseconds;
       dutyRan += off - on;
       if (!dutyOn) break;
       double wanted = Thread.VolatileRead(ref dutyRatio);
       if (wanted != factor) { factor = wanted; dutyRan = off - on; dutyPaused = 0; }
-      Sleep(dutyRan * (factor - 1) - dutyPaused);
+      Nap(clock, dutyRan * (factor - 1) - dutyPaused);
       All(job, false);
       on = clock.Elapsed.TotalMilliseconds;
       dutyPaused += on - off;
