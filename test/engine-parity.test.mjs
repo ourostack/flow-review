@@ -162,7 +162,7 @@ test('a known-failing list holds the WebKit-only stall as known, and an entry th
   const webkitJank = h.findings.filter((f) => f.check === 'jank' && !f.pass && f.cell.engine === 'webkit');
   assert.ok(webkitJank.length && webkitJank.every((f) => f.known === '#7' && f.knownCase === FLOW), JSON.stringify(webkitJank));
   assert.deepEqual(validate('report', h.report), []);
-  assert.deepEqual({ ...h.report.knownFailing, file: null }, { file: null, enforce: true, entries: 1, failing: 1, passes: [], notRun: [], judged: true });
+  assert.deepEqual({ ...h.report.knownFailing, file: null }, { file: null, enforce: true, entries: 1, failing: 1, passes: [], notRun: [], notJudged: [], judged: true });
   const off = run(list(['webkit', 'chromium']), 'off');
   assert.equal(off.status, 1, 'an entry whose cell passes fails the run');
   const o = read('off');

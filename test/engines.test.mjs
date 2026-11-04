@@ -148,6 +148,9 @@ test('the known-failing list: its shape, its cases, what it marks known, what co
   assert.ok(knownVerdict({ ...list, enforce: false }, units, findings).findings.every((f) => f.advisory), 'enforce false: advisory');
   // A listed cell a cancelled shard left missing gets no verdict: its coverage finding says so.
   assert.deepEqual(knownVerdict(list, units, findings, new Set([units[0].key, units[1].key])).summary.passes, []);
+  const chromiumOnly = knownVerdict(list, [], [], null, ['chromium']);
+  assert.deepEqual(chromiumOnly.findings, [], 'a run without the leg judges nothing on it');
+  assert.equal(chromiumOnly.summary.notJudged.length, 4);
   assert.deepEqual(grown(list, null), [], 'no base list: nothing to grow from');
   assert.deepEqual(grown(list, { entries: list.entries.slice(0, 2) }), ['flows/gone.flow.ts@webkit']);
   assert.deepEqual(grown({ entries: list.entries.slice(0, 1) }, list), [], 'shrinking is fine');

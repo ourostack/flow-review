@@ -127,7 +127,7 @@ runs:
             [ "$HIT" = true ] || "${pw[@]}" install --only-shell chromium
           elif [ "$HIT" = true ]; then
             # The cache holds the browser; the system libraries it needs (Linux) aren't cached.
-            [ "$RUNNER_OS" = Linux ] && "${pw[@]}" install-deps "$b"
+            if [ "$RUNNER_OS" = Linux ]; then "${pw[@]}" install-deps "$b"; fi
           else
             "${pw[@]}" install --with-deps "$b"
           fi
