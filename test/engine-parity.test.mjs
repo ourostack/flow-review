@@ -143,3 +143,31 @@ test('long tasks: WebKit times the main thread with a timer and finds what Chrom
     await page.context().close();
   }
 });
+
+test('a known-failing list holds the WebKit-only stall as known, and an entry that passes comes off', { skip: skip || (WHEEL_ENGINES.length < 2 && 'needs both engines'), timeout: 180_000 }, () => {
+  const dir = path.join(root, '.scratch', 'engine-known');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const FLOW = 'test/fixtures/wheel/flows/wheel.flow.json';
+  const list = (legs) => {
+    const file = path.join(dir, `${legs.join('-')}.json`);
+    fs.writeFileSync(file, JSON.stringify({ about: 'test', entries: [{ case: FLOW, legs, issue: '#7', owner: 'Wheel stall (test)', why: 'each wheel waits on the list in WebKit' }] }));
+    return file;
+  };
+  const run = (file, out) => spawnSync(process.execPath, ['bin/flow-review.mjs', 'run', FLOW, '--engine', 'chromium,webkit', '--known-failing', file, '--out', path.join(dir, out), '--fail-on', 'jank,known'], { cwd: root, encoding: 'utf8', env: { ...process.env, FLOW_REVIEW_WORKERS: '1' } });
+  const read = (out) => ({ report: JSON.parse(fs.readFileSync(path.join(dir, out, 'report.json'), 'utf8')), findings: fs.readFileSync(path.join(dir, out, 'findings.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) });
+  const held = run(list(['webkit']), 'held');
+  assert.equal(held.status, 0, `the listed WebKit stall doesn't fail the run:\n${held.stderr}`);
+  const h = read('held');
+  const webkitJank = h.findings.filter((f) => f.check === 'jank' && !f.pass && f.cell.engine === 'webkit');
+  assert.ok(webkitJank.length && webkitJank.every((f) => f.known === '#7' && f.knownCase === FLOW), JSON.stringify(webkitJank));
+  assert.deepEqual(validate('report', h.report), []);
+  assert.deepEqual({ ...h.report.knownFailing, file: null }, { file: null, enforce: true, entries: 1, failing: 1, passes: [], notRun: [], judged: true });
+  const off = run(list(['webkit', 'chromium']), 'off');
+  assert.equal(off.status, 1, 'an entry whose cell passes fails the run');
+  const o = read('off');
+  assert.deepEqual(o.report.knownFailing.passes, [`${FLOW}@chromium`]);
+  assert.ok(o.findings.some((f) => f.check === 'known' && !f.pass && /passes now/.test(f.measured)));
+  assert.match(fs.readFileSync(path.join(dir, 'off', 'summary.md'), 'utf8'), /passes now, take off/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

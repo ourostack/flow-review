@@ -18,6 +18,11 @@
     "schema": {
       "const": "flow-review-report/0"
     },
+    "knownFailing": {
+      "description": "The known-failing list the run read: its file, whether it is enforced, its entries, and, when the run judged it (unsharded, or a merge), how many still fail, and which pass now or no longer run (each also a failing known finding).",
+      "type": "object",
+      "properties": { "file": { "type": ["string", "null"] }, "enforce": { "type": "boolean" }, "entries": { "type": "integer" }, "judged": { "type": "boolean" }, "failing": { "type": "integer" }, "passes": { "type": "array", "items": { "type": "string" } }, "notRun": { "type": "array", "items": { "type": "string" } } }
+    },
     "engines": {
       "description": "Per browser engine: its units, failing and advisory findings, findings by check, what it measures differently (gaps) and the flows that didn't run on it (notRun). Absent from reports before engines.",
       "type": "object",

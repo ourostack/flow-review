@@ -13,6 +13,9 @@ inputs:
   engine:
     description: Comma list of browser engines every web flow runs on (chromium, webkit, msedge), one more matrix dimension. webkit is Playwright's WebKit (WKWebView, Safari); msedge is the runner's Microsoft Edge (WebView2). Default chromium. For merge, the engines whose units are expected (default every engine a shard report ran; pass it, since an engine whose every shard was cancelled left no report).
     default: ''
+  known-failing:
+    description: A known-failing list (default flows/flow-review-known-failing.json when it is there, relative to working-directory). Its cells' failures are reported as known; a listed case that passes, or no longer runs, is a failing known finding (in an unsharded run, and in merge).
+    default: ''
   fail-on:
     description: any, none, or a comma list of checks that fail the step.
     default: any
@@ -147,6 +150,7 @@ runs:
         FLOWS: ${{ inputs.flows }}
         SHARD: ${{ inputs.shard }}
         FLOW_REVIEW_ENGINE: ${{ inputs.engine }}
+        KNOWN_FAILING: ${{ inputs.known-failing }}
         FAIL_ON: ${{ inputs.fail-on }}
         ONLY: ${{ inputs.only }}
         OUT: ${{ inputs.out }}
@@ -169,11 +173,13 @@ runs:
           for g in "${flows[@]}"; do args+=(--flows "$g"); done
           set +e
           [ -n "$FLOW_REVIEW_ENGINE" ] && args+=(--engine "$FLOW_REVIEW_ENGINE")
+          [ -n "$KNOWN_FAILING" ] && args+=(--known-failing "$KNOWN_FAILING")
           node "$GITHUB_ACTION_PATH/bin/flow-review.mjs" merge "${dirs[@]}" --out "$OUT" --fail-on "$FAIL_ON" --coverage "$COVERAGE" "${args[@]}"
           code=$?
           name="${ARTIFACT:-flow-review-report}"
         else
           [ -n "$ONLY" ] && args+=(--only "$ONLY")
+          [ -n "$KNOWN_FAILING" ] && args+=(--known-failing "$KNOWN_FAILING")
           [ -n "$WORKERS" ] && args+=(--workers "$WORKERS")
           [ -n "$TIMES" ] && args+=(--times "$TIMES")
           [ -n "$SLACK" ] && args+=(--slack "$SLACK")

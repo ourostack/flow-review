@@ -108,3 +108,47 @@ test('a report keys results by engine and shows engines side by side', () => {
   // A Chromium-only report's summary is as it was.
   assert.doesNotMatch(markdown(buildReport({ units: units.slice(0, 1), findings: findings.slice(0, 1), startedAt: new Date(0).toISOString(), finishedAt: new Date(1).toISOString(), engines: ['chromium'] }), findings.slice(0, 1)), /By engine/);
 });
+
+test('the known-failing list: its shape, its cases, what it marks known, what comes off, and that it only shrinks', async () => {
+  const { caseOf, cellName, malformed, entryFor, markKnown, knownVerdict, grown } = await import('../lib/known-failing.mjs');
+  assert.deepEqual(caseOf('flows/app/w1.flow.ts'), { file: 'flows/app/w1.flow.ts', cell: null });
+  assert.deepEqual(caseOf('flows/app/w1.flow.ts:390x844-light-rm'), { file: 'flows/app/w1.flow.ts', cell: '390x844-light-rm' });
+  assert.deepEqual(caseOf('flows/a:b.flow.json:x:y'), { file: 'flows/a:b.flow.json', cell: 'x:y' }, 'split at the first .flow.<ext>:');
+  assert.equal(cellName({ viewport: '390x844', theme: 'dark', reducedMotion: true, engine: 'webkit' }), '390x844-dark-rm');
+  const list = { about: 'x', entries: [
+    { case: 'flows/w.flow.ts', legs: ['webkit'], issue: '#1', owner: 'Scroll P0 (d11c4e70)', why: 'dead input' },
+    { case: 'flows/v.flow.ts:390x844-light-rm', legs: ['webkit', 'msedge'], issue: '#2', owner: 'Polish (aa9e486a)', why: 'shift' },
+    { case: 'flows/gone.flow.ts', legs: ['webkit'], issue: '#3', owner: 'x (1)', why: 'y' },
+  ] };
+  assert.deepEqual(malformed(list), []);
+  assert.deepEqual(malformed({ enforce: 'yes', entries: [{ case: 'a.flow.ts', legs: ['safari', 'webkit', 'webkit'], issue: '12', owner: '', why: '' }] }), ['enforce is true or false', 'entry 1 (a.flow.ts): leg "safari" is not an engine (chromium, webkit, msedge)', 'entry 1 (a.flow.ts): a.flow.ts on webkit is listed twice', 'entry 1 (a.flow.ts): its issue must be #N', 'entry 1 (a.flow.ts): names no owner', 'entry 1 (a.flow.ts): says no why']);
+  const cell = (engine, theme = 'light') => ({ viewport: '390x844', theme, reducedMotion: true, engine });
+  assert.equal(entryFor(list, 'flows/w.flow.ts', cell('webkit'))?.issue, '#1');
+  assert.equal(entryFor(list, 'flows/w.flow.ts', cell('chromium')), null, 'only on its legs');
+  assert.equal(entryFor(list, 'flows/v.flow.ts', cell('msedge'))?.issue, '#2');
+  assert.equal(entryFor(list, 'flows/v.flow.ts', cell('msedge', 'dark')), null, 'only its cell');
+  const units = [
+    { key: 'flows/w.flow.ts#390x844-light-rm@webkit', file: 'flows/w.flow.ts', flow: 'W', surface: 'web', cell: cell('webkit') },
+    { key: 'flows/v.flow.ts#390x844-light-rm@webkit', file: 'flows/v.flow.ts', flow: 'V', surface: 'web', cell: cell('webkit') },
+    { key: 'flows/v.flow.ts#390x844-light-rm@msedge', file: 'flows/v.flow.ts', flow: 'V', surface: 'web', cell: cell('msedge') },
+  ];
+  const findings = [
+    { flow: 'W', step: 's', surface: 'web', cell: cell('webkit'), check: 'jank', pass: false, ms: 0 },
+    { flow: 'V', step: 's', surface: 'web', cell: cell('webkit'), check: 'cls', pass: false, ms: 0 },
+    { flow: 'V', step: 's', surface: 'web', cell: cell('msedge'), check: 'cls', pass: true, ms: 0 },
+  ];
+  assert.equal(markKnown(list, findings, (f) => ({ W: 'flows/w.flow.ts', V: 'flows/v.flow.ts' })[f]), 2);
+  assert.deepEqual(findings.map((f) => f.known ?? null), ['#1', '#2', null]);
+  const v = knownVerdict(list, units, findings);
+  assert.equal(v.summary.failing, 2);
+  assert.deepEqual(v.summary.passes, ['flows/v.flow.ts:390x844-light-rm@msedge']);
+  assert.deepEqual(v.summary.notRun, ['flows/gone.flow.ts@webkit']);
+  assert.deepEqual(v.findings.map((f) => [f.check, f.pass, f.advisory ?? false]), [['known', false, false], ['known', false, false]]);
+  for (const f of v.findings) assert.deepEqual(validate('finding', f), [], JSON.stringify(f));
+  assert.ok(knownVerdict({ ...list, enforce: false }, units, findings).findings.every((f) => f.advisory), 'enforce false: advisory');
+  // A listed cell a cancelled shard left missing gets no verdict: its coverage finding says so.
+  assert.deepEqual(knownVerdict(list, units, findings, new Set([units[0].key, units[1].key])).summary.passes, []);
+  assert.deepEqual(grown(list, null), [], 'no base list: nothing to grow from');
+  assert.deepEqual(grown(list, { entries: list.entries.slice(0, 2) }), ['flows/gone.flow.ts@webkit']);
+  assert.deepEqual(grown({ entries: list.entries.slice(0, 1) }, list), [], 'shrinking is fine');
+});
