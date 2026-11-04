@@ -40,7 +40,7 @@ launched or a page is reached. To slow only the network of pages on your own com
 - **The calibration is a bounded loop in the constrained process.** It is a fixed number of iterations of integer
   arithmetic on one thread, sized to take about 150 ms here, run in the gate, which is the first process of the
   constrained tree, not in a separate load generator. The gate times it a few times before the constraint (under a
-  second of one core in all), and again under the constraint (three timings, up to three rounds when it corrects); and
+  second of one core in all), and again under the constraint (five timings, up to four rounds when it corrects); and
   sixteen tasks of about 10 ms before and sixteen under it, each sent by the constraining process with an idle gap
   before it. It never runs on more than one thread, and it ends before the command starts.
 - **Nothing it starts outlives the run.** The gate leads a process group (POSIX) or is in a job (Windows, which closes
@@ -133,7 +133,7 @@ one, it corrects both.
   through a long slice at full speed or waited out the long pause after it, 5–7× in the median. The cycle
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
   grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
-  measured again, up to twice (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
+  measured again, up to three times (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
   leave the tree's process group (a browser Playwright launches) are found by parent and signalled one by one, within
   a quarter of a second of starting. If the constraining process is killed outright (`SIGKILL`), it can't clean up:
   the tree may be left stopped, using no CPU; `kill -KILL -<pid>` ends it.

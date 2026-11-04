@@ -48,7 +48,7 @@
         "duty": { "type": "object", "description": "The duty cycle's account: how long the tree ran and was paused, in how many cycles (on Windows, and the timer that kept the beat)." },
         "dutyCycle": { "type": "boolean", "description": "Whether a duty cycle slowed the tree: the duty-cycle mechanisms, and under a hard cap, where it slows each short task from its start." },
         "dutyRatio": { "type": "number", "description": "A duty cycle's whole-cycle to run ratio after correction." },
-        "corrections": { "type": "integer", "description": "How many times the mechanism was corrected after a calibration more than 5% off (at most 2)." },
+        "corrections": { "type": "integer", "description": "How many times the mechanism was corrected after a calibration more than 5% off (at most 3)." },
         "burst": { "type": "object", "description": "About 10 ms tasks with idle between, as an app's events: each sent to the tree and timed until it answered, their median time before and under the constraint, the factor, and whether it was within tolerance.", "properties": { "baselineMs": { "type": "number" }, "constrainedMs": { "type": "number" }, "achieved": { "type": "number" }, "within": { "type": "boolean" } } },
         "cpuSeconds": { "type": "number" },
         "processes": { "type": "integer" },
