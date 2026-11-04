@@ -65,7 +65,7 @@ export type UiStep = StepBase & (
   | { tabTraverse: true | { within?: string; max?: number } }
   | { setTheme: "light" | "dark" }
   | { resize: string }
-  | { scroll: { to: "top" | "bottom" } | { target: Target } }
+  | { scroll: { to: "top" | "bottom" } | { target: Target } | { wheel: number; times?: number; intervalMs?: number; target?: Target } }
 );
 
 export interface AgentExpect {
@@ -223,6 +223,8 @@ export interface Flow {
     reducedMotion?: boolean[];
     /** How a cell's theme is set: prefers-color-scheme emulation (default) or the flow's themeSteps. */
     themeVia?: "emulate" | "steps";
+    /** The engines this flow may run on (default every engine the run names); the rest are listed as not run. */
+    engines?: Engine[];
   };
   themeSteps?: { light?: UiStep[]; dark?: UiStep[] };
   fixtures?: { route?: Record<string, string | RouteFixture> };
@@ -251,8 +253,10 @@ export interface Finding {
   flow?: string;
   step?: string;
   surface?: Flow["surface"];
-  cell?: { viewport: string; theme: "light" | "dark"; reducedMotion: boolean } | null;
+  cell?: { viewport: string; theme: "light" | "dark"; reducedMotion: boolean; engine?: Engine } | null;
   check: CheckName;
+  /** How this engine measured the check, where engines differ (cls, jank). */
+  method?: string;
   pass: boolean;
   measured?: unknown;
   threshold?: unknown;
@@ -276,6 +280,23 @@ export declare const DEFAULT_THRESHOLDS: Required<Thresholds>;
 
 export declare function defineFlow<const F extends Flow>(flow: F): F;
 export declare const CHECKS: { ui: CheckName[]; agent: CheckName[] };
+
+// ---- Browser engines
+
+/** chromium (Playwright's Chromium), webkit (Playwright's WebKit: WKWebView, Safari) or msedge (installed Edge: WebView2). */
+export type Engine = "chromium" | "webkit" | "msedge";
+export declare const ENGINES: readonly Engine[];
+export declare const DEFAULT_ENGINE: "chromium";
+/** What an engine measures differently from Chromium, per check, and what flow-review does instead. */
+export declare const GAPS: Readonly<Record<Engine, readonly { check: string; what: string; instead: string }[]>>;
+/** Parses `chromium,webkit` (or an array) into a list of engines; throws on an unknown one. */
+export declare function parseEngines(value: string | string[] | undefined): Engine[];
+/** Launch options for an engine over `base` (msedge's channel; FLOW_REVIEW_CHROMIUM, FLOW_REVIEW_CHANNEL, FLOW_REVIEW_WEBKIT). */
+export declare function launchOptionsFor(engine: Engine, base?: LaunchOptions, env?: Record<string, string | undefined>): LaunchOptions;
+/** Which Playwright browser type drives an engine. */
+export declare function browserTypeOf(engine: Engine): "chromium" | "webkit";
+/** The key that moves focus to the next item: Tab, or Alt+Tab on WebKit. */
+export declare function tabKeyOf(engine: Engine): string;
 
 /** Launch options a browser is started with (a subset of Playwright's). */
 export interface LaunchOptions { headless?: boolean; devtools?: boolean; args?: string[]; [key: string]: unknown }

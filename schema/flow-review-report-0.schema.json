@@ -18,6 +18,22 @@
     "schema": {
       "const": "flow-review-report/0"
     },
+    "engines": {
+      "description": "Per browser engine: its units, failing and advisory findings, findings by check, what it measures differently (gaps) and the flows that didn't run on it (notRun). Absent from reports before engines.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["units", "failures", "byCheck", "gaps", "notRun"],
+        "properties": {
+          "units": { "type": "integer" },
+          "failures": { "type": "number" },
+          "advisories": { "type": "number" },
+          "byCheck": { "type": "object" },
+          "gaps": { "type": "array", "items": { "type": "object", "required": ["check", "what", "instead"], "properties": { "check": { "type": "string" }, "what": { "type": "string" }, "instead": { "type": "string" } } } },
+          "notRun": { "type": "array", "items": { "type": "object", "required": ["flow", "why"], "properties": { "flow": { "type": "string" }, "file": { "type": ["string", "null"] }, "why": { "type": "string" } } } }
+        }
+      }
+    },
     "tool": {
       "type": "object",
       "required": [

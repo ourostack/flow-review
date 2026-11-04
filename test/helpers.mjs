@@ -1,10 +1,14 @@
-import { chromium } from 'playwright';
+import * as playwright from 'playwright';
 import { PAGE_SCRIPT } from '../lib/checks.mjs';
 import { launchBrowser } from '../lib/browser.mjs';
+import { parseEngines, browserTypeOf, launchOptionsFor } from '../lib/engines.mjs';
+
+/** The engine these tests' pages run on: FLOW_REVIEW_ENGINE's first (CI runs the suite on chromium and on webkit). */
+export const ENGINE = parseEngines(process.env.FLOW_REVIEW_ENGINE)[0];
 
 let browser;
 export async function launch() {
-  browser ??= await launchBrowser(chromium, { executablePath: process.env.FLOW_REVIEW_CHROMIUM || undefined });
+  browser ??= await launchBrowser(playwright[browserTypeOf(ENGINE)], launchOptionsFor(ENGINE));
   return browser;
 }
 export async function close() {

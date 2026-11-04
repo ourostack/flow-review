@@ -1,0 +1,14 @@
+{
+  "schema": "flow-review/0",
+  "name": "Wheel fixture: scroll a message list",
+  "surface": "web",
+  "app": { "start": "node test/fixtures/serve.mjs 5306 test/fixtures/wheel", "url": "http://127.0.0.1:5306/" },
+  "matrix": { "viewports": ["800x600"], "themes": ["light"], "reducedMotion": [false] },
+  "steps": [
+    { "goto": "/" },
+    { "capture": { "moment": "top" } },
+    { "id": "wheel", "scroll": { "wheel": 120, "times": 10, "target": { "selector": "[data-list]" } } },
+    { "capture": { "moment": "scrolled" } }
+  ],
+  "checks": { "only": ["errors", "jank"] }
+}

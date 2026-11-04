@@ -17,9 +17,19 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Every test on each engine: the checks' fixture pages, the CLI's runs and the flows open in Chromium, then in WebKit
+  # (Safari's and WKWebView's engine). The WebKit job also runs the engine-parity tests, which need both browsers.
   test:
+    name: test (${{ matrix.engine }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    env:
+      FLOW_REVIEW_ENGINE: ${{ matrix.engine }}
+      FLOW_REVIEW_PARITY: ${{ matrix.engine == 'webkit' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,11 +45,33 @@ jobs:
         id: browsers
         with:
           path: ~/.cache/ms-playwright
-          key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
+          key: flow-review-${{ matrix.engine }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --only-shell chromium
+      # WebKit's system libraries aren't in the cache: they're installed every time.
+      - if: matrix.engine == 'webkit'
+        run: npx playwright install --with-deps webkit
       # The constrained-computer tests measure speed, so they run alone, on each platform, in the constrain job.
       - run: node --test test/*.test.mjs
+
+  # The engine-parity tests on macOS, where Playwright's WebKit is closest to WKWebView: the WebKit-only wheel stall
+  # fails there too, and the measurements WebKit takes another way agree with Chromium's.
+  webkit-mac:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      FLOW_REVIEW_PARITY: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --only-shell chromium && npx playwright install webkit
+      - run: node --test test/engine-parity.test.mjs
 
   # The constrained computer on each platform it supports: the CPU slowdown measured at about 4x, a grandchild slowed
   # as much, the memory cap enforced (Windows, Linux) or detected (macOS), the proxy's latency, and pages throttled.
@@ -71,7 +103,8 @@ jobs:
         run: npx playwright install --only-shell chromium
       - run: npm run test:constrain
 
-  # The action on the fixture flows, which fail on purpose: report only here.
+  # The action on the fixture flows, which fail on purpose: report only here. Each shard runs its share of the cells on
+  # Chromium and WebKit, as a product's flow review runs on the engines it ships to.
   action:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -87,7 +120,28 @@ jobs:
         with:
           flows: test/fixtures/flows/*.flow.ts test/fixtures/flows/*.flow.json
           shard: ${{ matrix.shard }}
+          engine: chromium,webkit
           fail-on: none
+
+  # Microsoft Edge on Windows (WebView2's engine), as the runner has it installed.
+  action-msedge:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: review
+        uses: ./
+        with:
+          flows: test/fixtures/flows/*.flow.ts
+          engine: msedge
+          artifact-name: flow-review-msedge
+          fail-on: none
+      - shell: bash
+        run: |
+          node -e 'const r = require("./report/report.json"); const keys = r.units.map((u) => u.key); if (!keys.length || !keys.every((k) => k.endsWith("@msedge")) || !/^\d+\./.test(r.provenance.browsers.msedge ?? "")) { console.error(keys, r.provenance.browsers); process.exit(1); } console.log(`msedge ${r.provenance.browsers.msedge}: ${keys.length} units`)'
+          ! grep -q '"check":"step","pass":false' report/findings.jsonl
 
   merge:
     needs: action
@@ -101,12 +155,21 @@ jobs:
         with:
           pattern: flow-review-*-of-*
           path: shards
-      - uses: ./
+      - id: merge
+        uses: ./
         with:
           command: merge
           reports: shards/*
           flows: test/fixtures/flows/*.flow.ts test/fixtures/flows/*.flow.json
+          engine: chromium,webkit
           fail-on: none
+      # Both engines' cells, each exactly once, side by side in the summary.
+      - env:
+          EXIT_CODE: ${{ steps.merge.outputs.exit-code }}
+        run: |
+          test "$EXIT_CODE" = 0
+          node -e 'const r = require("./report/report.json"); const c = r.coverage; if (c.missing.length || c.duplicated.length || c.unexpected.length) process.exit(1); const e = r.engines; if (!e.chromium?.units || e.chromium.units !== e.webkit?.units) { console.error(e); process.exit(1); }'
+          grep -q '### By engine' report/summary.md
 
   # The merge as it runs when a shard was cancelled: shard 2's folder holds no report. The fixture flows fail on
   # nothing here, so their missing cells are failing coverage findings, and the merge still passes.
