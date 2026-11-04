@@ -40,9 +40,9 @@ launched or a page is reached. To slow only the network of pages on your own com
 - **The calibration is a bounded loop in the constrained process.** It is a fixed number of iterations of integer
   arithmetic on one thread, sized to take about 150 ms here, run in the gate, which is the first process of the
   constrained tree, not in a separate load generator. The gate sizes it before the constraint (under a second of one
-  core), then times it in pairs, once with the constraint lifted and once under it (three pairs a measurement, up to
-  seven measurements when it corrects); and twelve tasks of about 10 ms with the constraint lifted and sixteen under
-  it, each sent by the constraining process with an idle gap before it. It never runs on more than one thread, and it ends before the command starts.
+  core), then times it in pairs, once with the constraint lifted and once under it (three to nine pairs a
+  measurement, up to seven measurements when it corrects); and twelve tasks of about 10 ms with the constraint lifted
+  and sixteen under it, each sent by the constraining process with an idle gap before it. It never runs on more than one thread, and it ends before the command starts.
 - **Nothing it starts outlives the run.** The gate leads a process group (POSIX) or is in a job (Windows, which closes
   the job and every process in it when the run ends) or a cgroup (Linux in CI). When the command ends, when the run
   times out, and when the constraining process exits, the whole tree is killed: the process group, every descendant the
@@ -95,7 +95,8 @@ the app never feels the pressure of being near it.
 
 **CPU.** `flow-review constrain` starts a small gate process, sizes a fixed loop in it, puts it under the constraint
 and times the loop in adjacent pairs: once with the constraint lifted (the duty cycle held with the tree running, a
-hard cap set to no limit), then once under it, three pairs a measurement. Each lift is answered once it has taken
+hard cap set to no limit), then once under it. A measurement is three pairs, and more, up to nine, while they scatter
+too much for their median to be known to within ±2.5% (a busy computer's pairs scatter). Each lift is answered once it has taken
 effect (within 20 ms, as the duty cycle's runs and pauses are cut short for it), and one not answered within 2 s fails
 the run. The median of the pairs' factors is the
 slowdown achieved on long work. Both halves of a pair run on the computer as it is at that moment, so a runner that
@@ -103,7 +104,8 @@ slows down for a while (another virtual machine on its host, its own background 
 the constraint; one baseline taken before the constraint and compared with every later reading took it for exactly
 that. Only then does the gate start the command, so the command and everything it starts are constrained from their
 first instruction. Then it times short tasks, as an app's clicks, keys and view switches are: twelve of about 10 ms with
-the constraint lifted and sixteen under it, each sent to the gate as a message after an idle gap of 20 to 32 ms and
+the constraint lifted and sixteen under it, in four rounds of three and four so load that comes and goes falls on both
+sides, each sent to the gate as a message after an idle gap of 20 to 32 ms and
 timed by the constraining process from sending it to the gate's answer. A tree that is stopped when its task arrives
 answers late, as a slow computer does, and the timing doesn't depend on the gate's own timers, which wake on a 15.6 ms
 tick in a windowless Windows process. The factor is the ratio of the two medians. When long work is more than ±10%
@@ -142,8 +144,9 @@ one, it corrects both.
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
   grows coarser but keeps its ratio. When a measurement is more than 5% off, the ratio is corrected and measured
   again, up to six times (the summary's `cpu.dutyRatio`; every measurement is in `cpu.calibration`); each correction
-  learns from the ones before it how far the factor moves for a change in the ratio, and none moves it more than 2×
-  either way. The factor reported is the last one measured. A
+  learns from the ones before it how far the factor moves for a change in the ratio, never corrects by more than the
+  plain ratio of the factor wanted to the factor measured (a factor that barely moved is taken for noise), and none
+  moves it more than 2× either way. The factor reported is the last one measured. A
   tree slowed so far beyond its ratio that the correction would take the ratio below 0.6 of the profile's is losing
   most of each run to being resumed late, as on a virtual machine that wakes a continued process a millisecond or two after the signal; there
   the period doubles instead, up to 40 ms (`cpu.dutyPeriodMs`), so each run outlasts the delay. Longer runs let more of

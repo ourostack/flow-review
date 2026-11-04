@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
-import { pairedFactor, nextCorrection, converge, within } from '../lib/constrain-calibrate.mjs';
+import { pairedFactor, nextCorrection, converge, within, medianError, enoughPairs } from '../lib/constrain-calibrate.mjs';
 
 test('a paired factor is the median of each pair, so a slow moment slows both halves and cancels', () => {
   // The runner ran at half speed for the second pair: a single baseline (100 ms) would read 8× there.
@@ -34,6 +34,29 @@ test('a correction learns how far the factor moved for the last change, and corr
   assert.ok(Math.abs(next - Math.sqrt(4 / 3.2)) < 1e-9, `${next}`);
   // A factor that moved the wrong way counts as elasticity 1: the plain ratio.
   assert.equal(nextCorrection(4, [{ strength: 1, achieved: 5 }, { strength: 0.8, achieved: 5 }]), 0.8);
+});
+
+test('a factor that barely moved for a change is noise, and never makes a correction larger than the plain ratio', () => {
+  // 5 → 4.8 for a 0.8× change is an elasticity of 0.18: taken at its word, the next step would be (4 / 4.8)^(1 / 0.18).
+  assert.equal(nextCorrection(4, [{ strength: 1, achieved: 5 }, { strength: 0.8, achieved: 4.8 }]), 4 / 4.8);
+});
+
+test("a median's error grows with the pairs' scatter and shrinks with their number", () => {
+  assert.equal(medianError([4]), Infinity);
+  assert.equal(medianError([4, 4, 4]), 0);
+  const tight = medianError([3.9, 4, 4.1]);
+  const loose = medianError([3, 4, 5]);
+  assert.ok(Math.abs(tight - (1.2533 * 1.4826 * 0.1) / Math.sqrt(3) / 4) < 1e-12, `${tight}`);
+  assert.ok(loose > tight * 9.9 && loose < tight * 10.1, `${loose} against ${tight}`);
+  assert.ok(medianError([3, 4, 5, 3, 4, 5, 3, 4, 5]) < loose, 'more pairs, a more precise median');
+});
+
+test('a measurement takes three pairs, more while they scatter, and at most nine', () => {
+  const precision = 0.025;
+  assert.equal(enoughPairs([4, 4.02], { precision }), false, 'never fewer than three');
+  assert.equal(enoughPairs([4, 4.02, 3.98], { precision }), true, 'three that agree are enough');
+  assert.equal(enoughPairs([3, 4, 5.5], { precision }), false, 'three that scatter are not');
+  assert.equal(enoughPairs([3, 4, 5.5, 3.1, 6, 2.8, 4.4, 5, 3.3], { precision }), true, 'nine is the most');
 });
 
 test('4× ±10% is 3.6× to 4.4×, both ends included', () => {
