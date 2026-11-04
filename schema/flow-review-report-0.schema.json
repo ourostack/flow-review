@@ -35,7 +35,7 @@
           "advisories": { "type": "number" },
           "byCheck": { "type": "object" },
           "gaps": { "type": "array", "items": { "type": "object", "required": ["check", "what", "instead"], "properties": { "check": { "type": "string" }, "what": { "type": "string" }, "instead": { "type": "string" } } } },
-          "notRun": { "type": "array", "items": { "type": "object", "required": ["flow", "why"], "properties": { "flow": { "type": "string" }, "file": { "type": ["string", "null"] }, "why": { "type": "string" } } } }
+          "notRun": { "type": "array", "items": { "type": "object", "required": ["flow", "why"], "properties": { "flow": { "type": "string" }, "file": { "type": ["string", "null"] }, "why": { "type": "string" }, "cells": { "type": "array", "items": { "type": "string" }, "description": "Only these cells were left out (the config's engines.<engine>.cells); without cells, the whole flow." } } } }
         }
       }
     },

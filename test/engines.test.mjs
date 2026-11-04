@@ -155,3 +155,24 @@ test('the known-failing list: its shape, its cases, what it marks known, what co
   assert.deepEqual(grown(list, { entries: list.entries.slice(0, 2) }), ['flows/gone.flow.ts@webkit']);
   assert.deepEqual(grown({ entries: list.entries.slice(0, 1) }, list), [], 'shrinking is fine');
 });
+
+test('a config\'s engines.<engine>.cells runs an engine in a few cells, and lists the rest', async () => {
+  const { withEngineCells } = await import('../lib/load.mjs');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const dir = path.join(process.cwd(), '.scratch', 'engine-cells');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(path.join(dir, 'flows'), { recursive: true });
+  const config = { schema: 'flow-review-config/0', surfaces: {}, engines: { msedge: { cells: ['390x844-light-rm'] } } };
+  assert.deepEqual(validate('config', config), []);
+  assert.ok(validate('config', { ...config, engines: { msedge: { cells: ['wide'] } } }).length > 0, 'a cell is named viewport-theme');
+  assert.ok(validate('config', { ...config, engines: { safari: { cells: ['390x844-light'] } } }).length > 0, 'an engine flow-review runs');
+  fs.writeFileSync(path.join(dir, 'flows', 'flow-review.config.json'), JSON.stringify(config));
+  const loaded = withEngineCells([{ file: 'flows/w.flow.ts', flow: web() }], dir);
+  const keys = unitsOf(loaded, ['chromium', 'msedge']).map((u) => u.key);
+  assert.deepEqual(keys, ['flows/w.flow.ts#390x844-light-rm', 'flows/w.flow.ts#390x844-dark-rm', 'flows/w.flow.ts#390x844-light-rm@msedge']);
+  const notRun = notRunByEngine(loaded, ['chromium', 'msedge']);
+  assert.deepEqual(notRun.msedge, [{ flow: 'w', file: 'flows/w.flow.ts', why: "the config's engines.msedge.cells is 390x844-light-rm", cells: ['390x844-dark-rm'] }]);
+  assert.equal(notRun.chromium, undefined);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
