@@ -41,6 +41,21 @@ test('contrast: text and icon-only controls', async () => {
   await page.context().close();
 });
 
+test('contrast: an icon on its own disc is measured against the disc, not the control behind it', async () => {
+  // A dark glyph on a small white disc, inside a dark control: about 17:1 on what it is drawn on, 1.18:1 against the control.
+  const badge = (disc, glyph) => `<main><h1>T</h1><div tabindex="0" role="group" aria-label="Your picture" style="position:relative;width:160px;height:90px;background:#262626"><span role="img" aria-label="Muted" style="position:absolute;left:8px;bottom:8px;width:28px;height:28px;border-radius:50%;background:${disc};display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2L14 14M14 2L2 14" stroke="${glyph}" stroke-width="2"/></svg></span></div></main>`;
+  const good = await pageWith(badge('#fff', '#171717'));
+  const g = await checks.contrast(good);
+  assert.deepEqual(failing(g), [], 'the dark glyph reads on its white disc');
+  assert.match(String(g[0].measured), /1 icons >= 3/);
+  await good.context().close();
+  const bad = await pageWith(badge('#fff', '#ddd'));
+  const [f, ...rest] = failing(await checks.contrast(bad));
+  assert.equal(rest.length, 0);
+  assert.ok(f.measured < 1.5, `a faint glyph on the disc still fails: ${f.measured}`);
+  await bad.context().close();
+});
+
 test('targetSize, with the inline exception', async () => {
   const small = 'style="width:12px;height:12px;padding:0;border:0;margin:0"';
   const [f] = await both('targetSize', '<main><button style="width:44px;height:44px">A</button><p>Read <a href="#x">this link</a> inside a sentence.</p></main>', `<main><button ${small}>a</button><button ${small}>b</button></main>`);
