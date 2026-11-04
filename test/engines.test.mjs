@@ -102,7 +102,7 @@ test('a report keys results by engine and shows engines side by side', () => {
   const md = markdown(report, findings);
   assert.match(md, /### By engine/);
   assert.match(md, /\| Flow \| chromium 156\.0 \| webkit 27\.2 \|/);
-  assert.match(md, /\| w \| ✅ 1 units \| ❌ jank 1 \|/);
+  assert.match(md, /\| w \| ✅ 1 unit \| ❌ jank 1 \|/);
   assert.match(md, /webkit measures differently/);
   assert.match(md, /didn't run on webkit: c \(a cdp flow\)/);
   // A Chromium-only report's summary is as it was.

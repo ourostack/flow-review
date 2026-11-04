@@ -69,7 +69,7 @@ test('a list that stalls each wheel only on WebKit fails jank on WebKit and pass
   assert.ok(report.provenance.browsers.chromium && report.provenance.browsers.webkit, JSON.stringify(report.provenance.browsers));
   const md = fs.readFileSync(path.join(out, 'summary.md'), 'utf8');
   assert.match(md, /### By engine/);
-  assert.match(md, /\| Wheel fixture: scroll a message list \| ✅ 1 units \| ❌ jank \d+ \|/);
+  assert.match(md, /\| Wheel fixture: scroll a message list \| ✅ 1 unit \| ❌ jank \d+ \|/);
 });
 
 test('an in-page meter on rAF and event timeStamps runs the same on both engines, and sees the WebKit-only dead input', { skip, timeout: 120_000 }, async () => {
@@ -162,6 +162,7 @@ test('a known-failing list holds the WebKit-only stall as known, and an entry th
   const webkitJank = h.findings.filter((f) => f.check === 'jank' && !f.pass && f.cell.engine === 'webkit');
   assert.ok(webkitJank.length && webkitJank.every((f) => f.known === '#7' && f.knownCase === FLOW), JSON.stringify(webkitJank));
   assert.deepEqual(validate('report', h.report), []);
+  assert.match(fs.readFileSync(path.join(dir, 'held', 'summary.md'), 'utf8'), /\| ✅ 1 unit \| ⚠️ known: jank \d+ \|/);
   assert.deepEqual({ ...h.report.knownFailing, file: null }, { file: null, enforce: true, entries: 1, failing: 1, passes: [], notRun: [], notJudged: [], judged: true });
   const off = run(list(['webkit', 'chromium']), 'off');
   assert.equal(off.status, 1, 'an entry whose cell passes fails the run');
