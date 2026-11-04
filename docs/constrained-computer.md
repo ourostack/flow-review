@@ -99,7 +99,11 @@ hard cap set to no limit), then once under it. A measurement is three pairs, and
 too much for their median to be known to within ±2.5% (a busy computer's pairs scatter). Each lift is answered once it has taken
 effect (within 20 ms, as the duty cycle's runs and pauses are cut short for it), and one not answered within 2 s fails
 the run. The median of the pairs' factors is the
-slowdown achieved on long work. Both halves of a pair run on the computer as it is at that moment, so a runner that
+slowdown achieved on long work. A median is unmoved by a minority of wild pairs, up to one of three or four of nine,
+however wild (a pair caught by a moment's load reads 2.9× or 4.8× among 4.0s). They still count in the scatter (the
+larger of the pairs' standard deviation and their scaled median absolute deviation), so a measurement with them takes
+more pairs. At nine the median is taken however the pairs scatter, and the correction and the ±10% check judge it: a
+majority of disturbed pairs moves the median, and a run whose last measurement is outside ±10% doesn't go ahead. Both halves of a pair run on the computer as it is at that moment, so a runner that
 slows down for a while (another virtual machine on its host, its own background work) slows both and isn't taken for
 the constraint; one baseline taken before the constraint and compared with every later reading took it for exactly
 that. Only then does the gate start the command, so the command and everything it starts are constrained from their
