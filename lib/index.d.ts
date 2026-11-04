@@ -446,7 +446,7 @@ export interface ConstrainedSummary {
   startedAt: string;
   finishedAt: string;
   ms: number;
-  cpu: { target: number; mechanism: CpuMechanism | null; enforcement: "enforced" | null; scope: "tree" | "thread" | null; achieved: number | null; tolerance: number; within: boolean | null; baselineMs: number | null; constrainedMs: number | null; iterations: number | null; cpus: number; rate?: number | null; quota?: string | null; burst?: { baselineMs: number; constrainedMs?: number; achieved?: number; tolerance?: number; within?: boolean }; factors?: number[]; calibration?: { achieved: number; factors: number[]; dutyRatio?: number; dutyPeriodMs?: number; rate?: number; quota?: string }[]; corrections?: number; dutyCycle?: boolean; [k: string]: unknown };
+  cpu: { target: number; mechanism: CpuMechanism | null; enforcement: "enforced" | null; scope: "tree" | "thread" | null; achieved: number | null; tolerance: number; within: boolean | null; baselineMs: number | null; constrainedMs: number | null; iterations: number | null; cpus: number; rate?: number | null; quota?: string | null; burst?: { baselineMs: number; constrainedMs?: number; achieved?: number; tolerance?: number; within?: boolean }; factors?: number[]; calibration?: { achieved: number; factors: number[]; dutyRatio?: number; dutyPeriodMs?: number; rate?: number; quota?: string }[]; corrections?: number; lifted?: { from: number; to?: number }[]; dutyCycle?: boolean; [k: string]: unknown };
   memory: { capMB: number | null; mechanism: MemoryMechanism | null; enforcement: "enforced" | "detected" | null; peakMB: number | null; hit: boolean; [k: string]: unknown };
   disk: { latencyMs: number; mbPerSec: number; mechanism: "node-fs-preload" | null };
   network: { latencyMs: number; downKbps: number; upKbps: number; mechanism: "delay-proxy" | null; proxy: string | null; requests?: number; tunnels?: number; bytesUp?: number; bytesDown?: number };
@@ -484,6 +484,14 @@ export interface ConstrainedRun {
   /** Resolves when the command and everything it left running have ended. */
   done: Promise<ConstrainedSummary>;
   stop(signal?: string): void;
+  /**
+   * Lifts the CPU constraint, so the harness can time its own processes unconstrained, answered once it has taken
+   * effect; restore() puts it back as calibrated. Only while the command runs (after ready, before done): otherwise
+   * they reject. Calls run in order; lifting a lifted run or restoring a constrained one changes nothing. Each lifted
+   * interval is in the summary's cpu.lifted.
+   */
+  lift(): Promise<{ lifted: boolean }>;
+  restore(): Promise<{ lifted: boolean }>;
 }
 export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; burstTolerance?: number; cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null; timeoutMinutes?: number; capDuty?: boolean; cgroupPeriodUs?: number | null }
 export declare function launchConstrained(command: string, args?: string[], options?: ConstrainOptions): ConstrainedRun;

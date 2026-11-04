@@ -313,6 +313,37 @@ test("a constraint the calibration can't bring to its factor is refused after it
   assert.equal(fs.existsSync(marker), false, 'the command never ran');
 });
 
+test('a harness lifts the constraint for its own unconstrained timings and puts it back as calibrated', { timeout: 120_000 }, async () => {
+  const file = path.join(scratch, 'lift.jsonl');
+  fs.rmSync(file, { force: true });
+  const { iterations } = baseline(100);
+  const run = launchConstrained(process.execPath, [fixture('lift.mjs'), String(iterations), file, '16'], { overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
+  await assert.rejects(run.lift(), /only while the command runs/, 'not before ready');
+  await run.ready;
+  const lines = () => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  const after = async (n) => { while (lines().length < n) await new Promise((r) => setTimeout(r, 50)); return lines().length; };
+  // Each switch's first timing may straddle it, so it is left out.
+  const c1 = await after(4);
+  assert.deepEqual(await run.lift(), { lifted: true });
+  assert.deepEqual(await run.lift(), { lifted: true }, 'lifting a lifted run changes nothing');
+  const l0 = lines().length + 1;
+  const l1 = await after(l0 + 4);
+  assert.deepEqual(await run.restore(), { lifted: false });
+  assert.deepEqual(await run.restore(), { lifted: false }, 'restoring a constrained run changes nothing');
+  const r0 = lines().length + 1;
+  const summary = await run.done;
+  const all = lines();
+  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const constrained = median([...all.slice(1, c1), ...all.slice(r0)].map((x) => x.ms));
+  const free = median(all.slice(l0, l1).map((x) => x.ms));
+  console.log(`lifted ${free.toFixed(0)} ms, constrained ${constrained.toFixed(0)} ms (${(constrained / free).toFixed(2)}×); ${describe(summary)}`);
+  assert.ok(constrained / free > 3 && constrained / free < 5.5, `the constraint lifted and put back: ${(constrained / free).toFixed(2)}×`);
+  assert.equal(summary.cpu.lifted.length, 1, 'one lifted interval, though lift was called twice');
+  assert.ok(summary.cpu.lifted[0].from < summary.cpu.lifted[0].to);
+  assert.deepEqual(validate('constrained', summary), []);
+  await assert.rejects(run.restore(), /only while the command runs/, 'not after done');
+});
+
 test('flow-review constrain: the memory cap is enforced, or detected where it can only be', { timeout: 120_000 }, async () => {
   const summaryFile = path.join(scratch, 'memory.json');
   const r = await run(['constrain', '--cpu', '1', '--memory-mb', '192', '--summary', summaryFile, '--', 'node', fixture('memory.mjs')]);

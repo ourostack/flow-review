@@ -218,8 +218,16 @@ if (constrained) {
 
 `FLOW_REVIEW_CONSTRAINED=old-windows-laptop` (a profile name) turns on the page side alone, for a harness not run
 under `flow-review constrain`. From code, `launchConstrained(command, args, { profile, overrides, summary })` does what
-the command line does and returns `{ ready, done, stop }`; `startDelayProxy({ latencyMs, downKbps, upKbps })` is the
-proxy on its own.
+the command line does and returns `{ ready, done, stop, lift, restore }`; `startDelayProxy({ latencyMs, downKbps,
+upKbps })` is the proxy on its own.
+
+A harness that measures something the calibration can't reach (an app's own web view, say) can pair its timings the
+same way: `await run.lift()` lets the whole tree run unconstrained (the controls the calibration lifts: the duty cycle
+held with the tree running, a hard cap at no limit), answered once it has taken effect, and `await run.restore()` puts
+the constraint back as calibrated, at its corrected ratio, rate or quota. They work only while the command runs, after
+`ready` and before `done`, and reject otherwise. Calls run one at a time, in order; lifting a lifted run, or restoring
+a constrained one, changes nothing. Every lifted interval is in the summary (`cpu.lifted`, ms from the run's start), so
+no timing taken inside one is read as constrained; a run that ends lifted closes its last interval.
 
 ## Can't be mistaken for a normal run
 
