@@ -293,6 +293,26 @@ test('a constraint that lets short tasks run at full speed is refused, and the c
   assert.equal(fs.existsSync(marker), false, 'the command never ran');
 });
 
+test("a constraint the calibration can't bring to its factor is refused after its corrections, and the command never runs", { timeout: 120_000 }, async () => {
+  // The defect planted: a duty cycle with a 4 s period. Each timing starts as the cycle starts again, so the loop's
+  // ~150 ms runs inside one long run at full speed, whatever the ratio (at most 12, a run of 333 ms): long work measures
+  // about 1×, and no correction can bring it to 4×.
+  const marker = path.join(scratch, 'unconverged-ran');
+  fs.rmSync(marker, { force: true });
+  const summary = await launchConstrained(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`], {
+    cpuMechanism: 'duty-cycle', periodMs: 4000, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null,
+  }).done;
+  console.log(`a duty cycle with a 4 s period on ${summary.platform}: ${describe(summary)}; measurements ${summary.cpu.calibration.map((c) => c.achieved).join(', ')}`);
+  assert.equal(summary.cpu.corrections, 6, 'it tried every correction');
+  assert.equal(summary.cpu.calibration.length, 7);
+  assert.ok(summary.cpu.achieved < 3.6, `long work measured ${summary.cpu.achieved}×`);
+  assert.equal(summary.cpu.within, false);
+  assert.match(summary.error, /measured [\d.]+× on long work \(±10% allowed\) after 6 corrections[^\n]*against 4×: the command didn't run/);
+  assert.equal(summary.ok, false);
+  assert.equal(summary.exitCode, null);
+  assert.equal(fs.existsSync(marker), false, 'the command never ran');
+});
+
 test('flow-review constrain: the memory cap is enforced, or detected where it can only be', { timeout: 120_000 }, async () => {
   const summaryFile = path.join(scratch, 'memory.json');
   const r = await run(['constrain', '--cpu', '1', '--memory-mb', '192', '--summary', summaryFile, '--', 'node', fixture('memory.mjs')]);

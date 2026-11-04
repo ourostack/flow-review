@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
-import { pairedFactor, nextCorrection } from '../lib/constrain-calibrate.mjs';
+import { pairedFactor, nextCorrection, converge, within } from '../lib/constrain-calibrate.mjs';
 
 test('a paired factor is the median of each pair, so a slow moment slows both halves and cancels', () => {
   // The runner ran at half speed for the second pair: a single baseline (100 ms) would read 8× there.
@@ -34,6 +34,60 @@ test('a correction learns how far the factor moved for the last change, and corr
   assert.ok(Math.abs(next - Math.sqrt(4 / 3.2)) < 1e-9, `${next}`);
   // A factor that moved the wrong way counts as elasticity 1: the plain ratio.
   assert.equal(nextCorrection(4, [{ strength: 1, achieved: 5 }, { strength: 0.8, achieved: 5 }]), 0.8);
+});
+
+test('4× ±10% is 3.6× to 4.4×, both ends included', () => {
+  assert.equal(within(3.6, 4, 0.1), true);
+  assert.equal(within(4.4, 4, 0.1), true);
+  assert.equal(within(3.59, 4, 0.1), false);
+  assert.equal(within(4.41, 4, 0.1), false);
+});
+
+// A made-up duty cycle on a computer that resumes a process 1 ms late: each 10 ms cycle's run loses that 1 ms, so a
+// ratio of 4 measures 6.67×, as GitHub's busy macOS runners did. `strength` scales the ratio.
+const lateResume = (lossMs = 1, periodMs = 10) => {
+  let ratio = 4;
+  return {
+    measure: async () => ({ achieved: Math.round((periodMs / (periodMs / ratio - lossMs)) * 100) / 100, factors: [] }),
+    correct: async (k) => { const before = ratio; ratio = Math.min(12, Math.max(2, ratio * k)); return { strength: ratio / before, reset: false }; },
+    ratio: () => ratio,
+  };
+};
+
+test('the calibration corrects a constraint that slows far more than its setting says until it is on target', async () => {
+  const c = lateResume();
+  const m = await converge({ target: 4, tolerance: 0.1, ...c });
+  assert.equal(m.calibration[0].achieved, 6.67, 'it started at 6.67×');
+  assert.equal(m.within, true);
+  assert.ok(within(m.achieved, 4, 0.05), `ended within ±5%: ${m.achieved}× after ${m.corrections} corrections`);
+  assert.ok(m.corrections <= 6);
+  assert.equal(m.calibration.length, m.corrections + 1);
+  assert.equal(m.calibration.at(-1).achieved, m.achieved);
+});
+
+test('a constraint that stays on target is measured once and not corrected', async () => {
+  let corrected = 0;
+  const m = await converge({ target: 4, tolerance: 0.1, measure: async () => ({ achieved: 4.08, factors: [4.1, 4.08, 4.0] }), correct: async () => { corrected++; return { strength: 1, reset: false }; } });
+  assert.deepEqual([m.corrections, corrected, m.within, m.achieved], [0, 0, true, 4.08]);
+});
+
+test("a constraint that can't reach the target says so after six corrections, so the run is refused", async () => {
+  // Whatever the correction, the computer gives 8×: a mechanism stuck at its bound, or a host that starves the tree.
+  const calls = [];
+  const m = await converge({ target: 4, tolerance: 0.1, measure: async () => ({ achieved: 8, factors: [8, 8, 8] }), correct: async (k) => { calls.push(k); return { strength: k, reset: false }; } });
+  assert.equal(m.within, false);
+  assert.equal(m.corrections, 6);
+  assert.equal(m.calibration.length, 7);
+  assert.ok(calls.every((k) => k >= 0.5 && k <= 2), `every correction bounded to 2× either way: ${calls}`);
+});
+
+test('a reset (the duty cycle\'s period doubled) starts the learning again', async () => {
+  const seen = [];
+  let n = 0;
+  const readings = [9, 6, 4.02];
+  await converge({ target: 4, tolerance: 0.1, measure: async () => ({ achieved: readings[n++], factors: [] }), correct: async (k) => { seen.push(k); return { strength: 1, reset: true }; } });
+  // After a reset the history holds one measurement, so the next correction is the plain ratio again.
+  assert.deepEqual(seen.map((k) => Math.round(k * 1000) / 1000), [0.5, Math.round((4 / 6) * 1000) / 1000]);
 });
 
 const duty = fileURLToPath(new URL('../lib/constrain-duty.mjs', import.meta.url));
