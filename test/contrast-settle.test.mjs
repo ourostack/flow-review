@@ -62,7 +62,7 @@ test('contrast: the same text findings at every capture timing, and faint words 
   const rest = seen['at rest'];
   assert.equal(rest.length, 1, `at rest, only the faint words fail: ${JSON.stringify(rest)}`);
   assert.match(rest[0], /^#faint /);
-  for (const [name, found] of Object.entries(seen)) assert.deepEqual(found, rest, `${name}: the same findings as at rest`);
+  assert.deepEqual(seen, Object.fromEntries(Object.keys(TIMINGS).map((name) => [name, rest])), 'every timing gives the findings at rest');
 });
 
 test('contrast: an icon is measured at the opacity it is drawn with, its wrappers\' included', async () => {
