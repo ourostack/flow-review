@@ -35,14 +35,14 @@ launched or a page is reached. To slow only the network of pages on your own com
 
 - **Only the command's tree is slowed.** The duty cycle signals only the gate's process group and the members of the
   tree it has seen; the Windows job and the Linux cgroup hold only the gate and what it starts. The duty cycle's own
-  beat is a thread in the constraining process that sleeps (`Atomics.wait` on macOS and Linux, `Thread.Sleep` on
-  Windows) between signals; it never spins.
+  beat is a thread that sleeps between signals (on its event loop's timers in the constraining process on macOS and
+  Linux, on a high-resolution waitable timer in the job's helper on Windows); it never spins.
 - **The calibration is a bounded loop in the constrained process.** It is a fixed number of iterations of integer
   arithmetic on one thread, sized to take about 150 ms here, run in the gate, which is the first process of the
   constrained tree, not in a separate load generator. The gate times it a few times before the constraint (under a
-  second of one core in all), and again under the constraint (three timings, up to three rounds when it corrects), then
-  sixteen bursts of about 10 ms with idle gaps between. It never runs on more than one thread, and it ends before the
-  command starts.
+  second of one core in all), and again under the constraint (three timings, up to three rounds when it corrects); and
+  sixteen tasks of about 10 ms before and sixteen under it, each sent by the constraining process with an idle gap
+  before it. It never runs on more than one thread, and it ends before the command starts.
 - **Nothing it starts outlives the run.** The gate leads a process group (POSIX) or is in a job (Windows, which closes
   the job and every process in it when the run ends) or a cgroup (Linux in CI). When the command ends, when the run
   times out, and when the constraining process exits, the whole tree is killed: the process group, every descendant the
@@ -87,7 +87,7 @@ the app never feels the pressure of being near it.
 
 | | Windows | Linux in CI | Linux elsewhere, macOS |
 | --- | --- | --- | --- |
-| CPU, processes | Enforced: a suspend/resume duty cycle of a job object's processes | Enforced: a cgroup v2 `cpu.max` | Enforced: a stop/continue duty cycle |
+| CPU, processes | Enforced: a suspend/resume duty cycle of a job object's processes | Enforced: a cgroup v2 `cpu.max`, with a stop/continue duty cycle under it | Enforced: a stop/continue duty cycle |
 | CPU, browser pages | Enforced: DevTools CPU throttling | the same | the same |
 | Memory | Enforced: the job's committed-memory limit | Enforced: the cgroup's `memory.max`, with no swap | Detected: the tree's resident memory, sampled 4 times a second |
 | Disk | Node processes' `fs` calls | the same | the same |
@@ -95,21 +95,42 @@ the app never feels the pressure of being near it.
 
 **CPU.** `flow-review constrain` starts a small gate process, times a fixed loop in it, puts it under the constraint,
 times the loop again, and only then has the gate start the command, so the command and everything it starts are
-constrained from their first instruction. The two timings are the slowdown achieved; when it is more than ±25%
-(`--tolerance`) from the profile's, the command doesn't run and the exit code is 4. The measured factor is in the
-banner, the summary and the command's `FLOW_REVIEW_CONSTRAINED`.
+constrained from their first instruction. The two timings are the slowdown achieved on long work. Then it times short
+tasks, as an app's clicks, keys and view switches are: sixteen of about 10 ms, each sent to the gate as a message after
+an idle gap of 20 to 32 ms and timed by the constraining process from sending it to the gate's answer, before the
+constraint and under it. A tree that is stopped when its task arrives answers late, as a slow computer does, and the
+timing doesn't depend on the gate's own timers, which wake on a 15.6 ms tick in a windowless Windows process. The
+factor is the ratio of the two medians. When either factor is more than ±25% (`--tolerance`) from the profile's, the
+command doesn't run and the exit code is 4: an app's interactions are short tasks, and a constraint that slowed only
+long work would read optimistic exactly where it matters. Both factors are in the banner, the summary (`cpu.achieved`,
+`cpu.burst.achieved`) and the command's `FLOW_REVIEW_CONSTRAINED` (`tree.achieved`, `tree.burst`).
+
+Every mechanism here slows a short task from its first millisecond. An operating system's hard cap alone doesn't: it
+gives the tree its share over a window (Windows' job cap over a window of its own choosing; a cgroup over its period),
+so a task that starts after idle runs at full speed until the window's share is spent. Measured on GitHub's runners,
+10 ms tasks ran 0.9–1.5× slower under the job cap and 2.7–3.0× under a 10 ms cgroup period while long work ran 4×. So
+each hard cap has the duty cycle under it (the summary's `cpu.dutyCycle`): the duty cycle slows every thread from the
+moment it runs, and the cap holds work spread over several threads to one slowed core. When the calibration corrects
+one, it corrects both.
 
 - Windows: every process in the job is suspended and resumed in turn, running a quarter of every 10 ms, so every
-  thread runs 4× slower, as with the duty cycle below. `--cpu-mechanism hard-cap` uses the job's hard CPU-rate cap
-  instead: a share of the whole machine, set so the tree has one core at a quarter of its speed (`10000 / (4 × logical
-  CPUs)` cycles in 10,000). A single thread runs 4× slower; work spread over several threads is slowed more, because
-  the threads share that one slowed core.
+  thread runs 4× slower, as with the duty cycle below. The beat is a high-resolution waitable timer, which wakes within
+  a fraction of a millisecond whatever the system's timer resolution, in a helper that opts out of Windows 11's power
+  throttling; a plain sleep wakes on the timer's tick, which Windows 11 may keep at 15.6 ms for a process with no
+  visible window, and a cycle that coarse would let a 10 ms task run through a whole slice at full speed (the summary's
+  `cpu.duty.timer` says which kept the beat). `--cpu-mechanism hard-cap` adds the job's hard CPU-rate cap: a share of
+  the whole machine, set so the tree has one core at a quarter of its speed (`10000 / (4 × logical CPUs)` cycles in
+  10,000). A single thread runs 4× slower; work spread over several threads is slowed more, because the threads share
+  that one slowed core.
 - Linux: when `CI=true` and `sudo -n` works (as on GitHub's runners), a cgroup with `cpu.max` of a quarter of one core
-  every 10 ms (a longer period above 10×, as the kernel's quota is at least 1 ms): the same as Windows' hard cap.
-  `--cpu-mechanism hard-cap` asks for it anywhere; `duty-cycle` uses the duty cycle instead, and the cgroup, when there
-  is one, then caps memory only.
+  every 10 ms (a longer period above 10×, as the kernel's quota is at least 1 ms), with the duty cycle below under it:
+  the same as Windows' hard cap. `--cpu-mechanism hard-cap` asks for it anywhere; `duty-cycle` uses the duty cycle
+  alone, and the cgroup, when there is one, then caps memory only.
 - macOS, and Linux without the cgroup: the tree is stopped (`SIGSTOP`) and continued (`SIGCONT`) in turn, running a
-  quarter of every 10 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The cycle
+  quarter of every 10 ms. Every thread runs 4× slower, in parallel, so parallel work isn't slowed more. The beat sleeps
+  on its worker thread's timers, not `Atomics.wait`, which on GitHub's macOS runners woke about four times late (a
+  2.5 ms wait took about 12 ms, a 7.5 ms one up to 95), so the slices ran long and uneven: a 10 ms task either ran
+  through a long slice at full speed or waited out the long pause after it, 5–7× in the median. The cycle
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
   grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
   measured again, up to twice (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
@@ -181,12 +202,12 @@ proxy on its own.
 ## Can't be mistaken for a normal run
 
 - A banner on stderr before the command starts and after it ends, starting `CONSTRAINED COMPUTER (old-windows-laptop)`,
-  with the measured factor and the caps hit; in GitHub Actions, a notice on the run too.
+  with the measured factors and the caps hit; in GitHub Actions, a notice on the run too.
 - `FLOW_REVIEW_CONSTRAINED` in the command's environment.
 - The summary (`--summary <file>`, `flow-review schema constrained`): the profile, the settings and any overrides, the
-  achieved CPU factor and its baseline and constrained timings, each mechanism and whether it was enforced or detected,
+  achieved CPU factors on long work and on 10 ms tasks, with their baseline and constrained timings, each mechanism and whether it was enforced or detected,
   peak memory, `capsHit`, the proxy's traffic, what let it run here (`sandbox`), its time limit and whether it was
-  reached (`timeoutMinutes`, `timedOut`), and how the command ended. `ok` is true only when the slowdown was within
+  reached (`timeoutMinutes`, `timedOut`), and how the command ended. `ok` is true only when both slowdowns were within
   tolerance, no cap was hit, the run didn't time out and the command exited 0.
 - `flow-review run` under the switch puts `provenance.constrained` in report.json and a line in summary.md.
 
@@ -194,5 +215,6 @@ proxy on its own.
 
 The command's own, or: 2 when the switch can't constrain as asked (a usage error, a host that isn't a CI runner or a
 declared sandbox, or a mechanism this computer doesn't have; it never falls back to an unconstrained run); 3 when the
-tree went over the memory cap; 4 when the measured CPU slowdown was outside the tolerance, and the command didn't run;
+tree went over the memory cap; 4 when the measured CPU slowdown, on long work or on 10 ms tasks, was outside the
+tolerance, and the command didn't run;
 5 when the run went past `--timeout-minutes` and its tree was killed.

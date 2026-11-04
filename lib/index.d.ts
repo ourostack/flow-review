@@ -408,7 +408,7 @@ export interface ConstrainedSettings {
   network: { latencyMs: number; downKbps: number; upKbps: number };
   overridden?: string[];
   /** Set inside a tree flow-review constrain launched: its processes are already CPU-throttled. */
-  tree?: { cpu: CpuMechanism | null; memory: MemoryMechanism | null; achieved: number | null };
+  tree?: { cpu: CpuMechanism | null; memory: MemoryMechanism | null; achieved: number | null; burst?: number | null };
   proxy?: string | null;
 }
 export type CpuMechanism = "job-duty-cycle" | "job-cpu-rate" | "cgroup-cpu-max" | "duty-cycle";
@@ -425,7 +425,7 @@ export interface ConstrainedSummary {
   startedAt: string;
   finishedAt: string;
   ms: number;
-  cpu: { target: number; mechanism: CpuMechanism | null; enforcement: "enforced" | null; scope: "tree" | "thread" | null; achieved: number | null; tolerance: number; within: boolean | null; baselineMs: number | null; constrainedMs: number | null; iterations: number | null; cpus: number; rate?: number | null; quota?: string | null; [k: string]: unknown };
+  cpu: { target: number; mechanism: CpuMechanism | null; enforcement: "enforced" | null; scope: "tree" | "thread" | null; achieved: number | null; tolerance: number; within: boolean | null; baselineMs: number | null; constrainedMs: number | null; iterations: number | null; cpus: number; rate?: number | null; quota?: string | null; burst?: { baselineMs: number; constrainedMs?: number; achieved?: number; within?: boolean }; dutyCycle?: boolean; [k: string]: unknown };
   memory: { capMB: number | null; mechanism: MemoryMechanism | null; enforcement: "enforced" | "detected" | null; peakMB: number | null; hit: boolean; [k: string]: unknown };
   disk: { latencyMs: number; mbPerSec: number; mechanism: "node-fs-preload" | null };
   network: { latencyMs: number; downKbps: number; upKbps: number; mechanism: "delay-proxy" | null; proxy: string | null; requests?: number; tunnels?: number; bytesUp?: number; bytesDown?: number };

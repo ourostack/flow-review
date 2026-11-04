@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-11-arm]
+        os: [ubuntu-latest, macos-latest, windows-latest, windows-11-arm]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,13 +24,5 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - if: runner.os != 'macOS'
-        run: node test/constrain/burst-probe.mjs
-      - if: runner.os == 'macOS'
-        run: |
-          sysctl -a 2>/dev/null | grep -iE 'coalesc|timer|hz' | head -40 || true
-          sysctl hw.model machdep.cpu.brand_string kern.osproductversion || true
-          node test/constrain/burst-probe.mjs sleep
-          sudo sysctl -w kern.timer_coalescing_enabled=0 || true
-          PROBE_TAG=-nocoalesce node test/constrain/burst-probe.mjs sleep || true
-          PROBE_TAG=-nocoalesce node test/constrain/burst-probe.mjs || true
+      - run: node test/constrain/burst-probe.mjs before before/lib/constrain.mjs
+      - run: node test/constrain/burst-probe.mjs

@@ -13,7 +13,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { resolveSettings, constrainedFromEnv, bannerLine, PROFILES, CONSTRAINED_ENV } from '../../lib/constrain-profile.mjs';
-import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv, sandboxedHost } from '../../lib/constrain.mjs';
+import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv, sandboxedHost, launchConstrained } from '../../lib/constrain.mjs';
 import { startDelayProxy } from '../../lib/constrain-proxy.mjs';
 import { constrainPage, constrainCdp } from '../../lib/constrain-cdp.mjs';
 import { baseline, within } from '../../lib/constrain-calibrate.mjs';
@@ -230,6 +230,9 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     console.log(`constrain on ${summary.platform} (${summary.cpu.cpus} CPUs): ${describe(summary)}; memory ${summary.memory.mechanism} (${summary.memory.enforcement}), peak ${summary.memory.peakMB} MB`);
     assert.equal(summary.cpu.within, true);
     assert.ok(summary.cpu.achieved >= 3 && summary.cpu.achieved <= 5, `measured ${summary.cpu.achieved}×`);
+    assert.equal(summary.cpu.burst.within, true);
+    assert.ok(summary.cpu.burst.achieved >= 3 && summary.cpu.burst.achieved <= 5, `10 ms tasks measured ${summary.cpu.burst.achieved}×`);
+    assert.equal(summary.cpu.dutyCycle, true, 'every CPU mechanism has a duty cycle, so short tasks are slowed from their start');
     assert.equal(summary.ok, true);
     assert.deepEqual(summary.capsHit, []);
     const tree = JSON.parse(r.stdout.split('TREE ')[1].split('\n')[0]);
@@ -240,6 +243,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.ok(ratio >= 2.8 && ratio <= 5.5, `a grandchild ran ${ratio.toFixed(2)}× slower, not about 4×`);
     assert.equal(tree.env.profile, 'old-windows-laptop');
     assert.equal(tree.env.tree.achieved, summary.cpu.achieved, 'the harness learns the measured factor');
+    assert.equal(tree.env.tree.burst, summary.cpu.burst.achieved, 'and the short tasks\' factor');
     assert.equal(tree.proxy, summary.network.proxy);
     assert.ok(tree.requestMs >= 145, `a request through the run's proxy took ${tree.requestMs.toFixed(0)} ms, under 150 ms`);
     assert.ok(tree.statMs >= 19, `5 stats took ${tree.statMs.toFixed(0)} ms, under 5 × 4 ms`);
@@ -259,6 +263,28 @@ test("flow-review constrain: the platform's other CPU mechanism", { skip: proces
   if (process.platform === 'linux') assert.equal(summary.cpu.quota ?? null, null, 'under the duty cycle a cgroup holds memory only, never a CPU cap as well');
   assert.equal(r.status, 0, r.stderr);
   assert.equal(summary.cpu.within, true);
+  assert.equal(summary.cpu.burst.within, true, `10 ms tasks measured ${summary.cpu.burst.achieved}×`);
+  assert.equal(summary.cpu.dutyCycle, true);
+});
+
+// The defect this gate exists for, planted: a hard cap alone, over a window long enough (Windows' own, or a Linux cgroup
+// period of 100 ms) that a 10 ms task after idle runs at full speed. Long work measures about 4×; the short tasks
+// don't, so the command doesn't run.
+test('a constraint that lets short tasks run at full speed is refused, and the command never runs', { skip: (process.platform === 'darwin' && 'macOS has no hard cap to plant it in') || (process.platform === 'linux' && process.env.CI !== 'true' && 'the cgroup needs CI'), timeout: 60_000 }, async () => {
+  const marker = path.join(scratch, 'escaped-ran');
+  fs.rmSync(marker, { force: true });
+  const summary = await launchConstrained(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`], {
+    cpuMechanism: 'hard-cap', capDuty: false, cgroupPeriodUs: 100_000, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null,
+  }).done;
+  console.log(`a hard cap alone on ${summary.platform}: ${describe(summary)}`);
+  assert.equal(summary.cpu.dutyCycle, false);
+  assert.ok(summary.cpu.burst.achieved < 3, `10 ms tasks measured ${summary.cpu.burst.achieved}×, not let through`);
+  assert.equal(summary.cpu.burst.within, false);
+  assert.equal(summary.cpu.within, false);
+  assert.match(summary.error, /on 10 ms tasks, outside 4× ±25%: the command didn't run/);
+  assert.equal(summary.ok, false);
+  assert.equal(summary.exitCode, null);
+  assert.equal(fs.existsSync(marker), false, 'the command never ran');
 });
 
 test('flow-review constrain: the memory cap is enforced, or detected where it can only be', { timeout: 120_000 }, async () => {
