@@ -133,7 +133,11 @@ one, it corrects both.
   through a long slice at full speed or waited out the long pause after it, 5–7× in the median. The cycle
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
   grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
-  measured again, up to three times (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. Processes that
+  measured again, up to three times (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. A
+  tree slowed far more than the ratio says (below 0.6 of it would be needed) is losing most of each run to being
+  resumed late, as on a virtual machine that wakes a continued process a millisecond or two after the signal; there
+  the period doubles instead, up to 40 ms (`cpu.dutyPeriodMs`), so each run outlasts the delay. Longer runs let more of
+  a short task through at full speed, which the 10 ms tasks' factor then shows. Processes that
   leave the tree's process group (a browser Playwright launches) are found by parent and signalled one by one, within
   a quarter of a second of starting. If the constraining process is killed outright (`SIGKILL`), it can't clean up:
   the tree may be left stopped, using no CPU; `kill -KILL -<pid>` ends it.
