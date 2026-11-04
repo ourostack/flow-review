@@ -107,6 +107,10 @@ runs:
         echo "browsers=${need[*]}" >> "$GITHUB_OUTPUT"
         echo "key=$(IFS=-; echo "${need[*]:-none}")" >> "$GITHUB_OUTPUT"
         echo "msedge=$msedge" >> "$GITHUB_OUTPUT"
+        webkit=false
+        for b in "${need[@]}"; do [ "$b" = webkit ] && webkit=true; done
+        echo "webkit-deps=$([ "$webkit" = true ] && [ "$RUNNER_OS" = Linux ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
     - name: Restore browsers
       if: inputs.command == 'run' && steps.engines.outputs.browsers != ''
       id: browsers
@@ -114,6 +118,13 @@ runs:
       with:
         path: ${{ runner.os == 'Windows' && '~/AppData/Local/ms-playwright' || runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
         key: flow-review-${{ steps.engines.outputs.key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.install.outputs.playwright }}
+    # WebKit's system libraries on Linux, kept between runs: the runners' Ubuntu mirror is sometimes slow.
+    - name: Restore WebKit's system libraries
+      if: inputs.command == 'run' && steps.engines.outputs.webkit-deps == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/flow-review-webkit-deps
+        key: flow-review-webkit-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.engines.outputs.image }}-${{ steps.install.outputs.playwright }}
     - name: Install browsers
       if: inputs.command == 'run' && steps.engines.outputs.browsers != ''
       shell: bash
@@ -125,11 +136,9 @@ runs:
         for b in $BROWSERS; do
           if [ "$b" = chromium ]; then
             [ "$HIT" = true ] || "${pw[@]}" install --only-shell chromium
-          elif [ "$HIT" = true ]; then
-            # The cache holds the browser; the system libraries it needs (Linux) aren't cached.
-            if [ "$RUNNER_OS" = Linux ]; then "${pw[@]}" install-deps "$b"; fi
           else
-            "${pw[@]}" install --with-deps "$b"
+            [ "$HIT" = true ] || "${pw[@]}" install "$b"
+            if [ "$RUNNER_OS" = Linux ]; then bash "$GITHUB_ACTION_PATH/lib/webkit-deps.sh" ~/.cache/flow-review-webkit-deps "${pw[@]}"; fi
           fi
         done
     - name: Microsoft Edge

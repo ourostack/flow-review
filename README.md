@@ -263,7 +263,7 @@ Each one also records whether it holds its Moment: `[data-moment="<kind>"]`, or 
 
 To let some checks block merges and keep the rest advisory, including without admin rights on the repository, see [Gating merges](docs/gating.md).
 
-The action (`action.yml`, `uses: ourostack/flow-review@<tag or commit>`) installs flow-review and the browsers its `engine` input names (Playwright's Chromium and WebKit, cached by Playwright version, with WebKit's system libraries on Linux; the runner's Microsoft Edge for `msedge`), runs, uploads `report/` as an artifact, writes the summary to the job, and fails per `fail-on`. Pin it to a release tag, or to the tag's commit:
+The action (`action.yml`, `uses: ourostack/flow-review@<tag or commit>`) installs flow-review and the browsers its `engine` input names (Playwright's Chromium and WebKit, cached by Playwright version, with WebKit's system libraries on Linux, whose packages are cached too since the runners' Ubuntu mirror is sometimes slow; the runner's Microsoft Edge for `msedge`), runs, uploads `report/` as an artifact, writes the summary to the job, and fails per `fail-on`. Pin it to a release tag, or to the tag's commit:
 
 ```yaml
 jobs:

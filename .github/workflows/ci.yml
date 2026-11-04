@@ -48,10 +48,20 @@ jobs:
           key: flow-review-${{ matrix.engine }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}
       - if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --only-shell chromium
-      # WebKit's system libraries aren't in the cache: they're installed every time.
+      # WebKit's system libraries, kept between runs as the action keeps them (lib/webkit-deps.sh).
       - if: matrix.engine == 'webkit'
-        timeout-minutes: 5
-        run: npx playwright install --with-deps webkit
+        id: image
+        run: echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+      - if: matrix.engine == 'webkit'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/flow-review-webkit-deps
+          key: flow-review-webkit-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.image.outputs.image }}-${{ steps.pw.outputs.version }}
+      - if: matrix.engine == 'webkit'
+        timeout-minutes: 8
+        run: |
+          npx playwright install webkit
+          bash lib/webkit-deps.sh ~/.cache/flow-review-webkit-deps npx playwright
       # The constrained-computer tests measure speed, so they run alone, on each platform, in the constrain job.
       - run: node --test test/*.test.mjs
 
