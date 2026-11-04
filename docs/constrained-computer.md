@@ -39,10 +39,10 @@ launched or a page is reached. To slow only the network of pages on your own com
   Linux, on a high-resolution waitable timer in the job's helper on Windows); it never spins.
 - **The calibration is a bounded loop in the constrained process.** It is a fixed number of iterations of integer
   arithmetic on one thread, sized to take about 150 ms here, run in the gate, which is the first process of the
-  constrained tree, not in a separate load generator. The gate times it a few times before the constraint (under a
-  second of one core in all), and again under the constraint (five timings, up to four rounds when it corrects); and
-  sixteen tasks of about 10 ms before and sixteen under it, each sent by the constraining process with an idle gap
-  before it. It never runs on more than one thread, and it ends before the command starts.
+  constrained tree, not in a separate load generator. The gate sizes it before the constraint (under a second of one
+  core), then times it in pairs, once with the constraint lifted and once under it (three pairs a measurement, up to
+  seven measurements when it corrects); and twelve tasks of about 10 ms with the constraint lifted and sixteen under
+  it, each sent by the constraining process with an idle gap before it. It never runs on more than one thread, and it ends before the command starts.
 - **Nothing it starts outlives the run.** The gate leads a process group (POSIX) or is in a job (Windows, which closes
   the job and every process in it when the run ends) or a cgroup (Linux in CI). When the command ends, when the run
   times out, and when the constraining process exits, the whole tree is killed: the process group, every descendant the
@@ -93,15 +93,21 @@ the app never feels the pressure of being near it.
 | Disk | Node processes' `fs` calls | the same | the same |
 | Network | A local proxy for anything that honours `HTTP_PROXY`; DevTools for pages | the same | the same |
 
-**CPU.** `flow-review constrain` starts a small gate process, times a fixed loop in it, puts it under the constraint,
-times the loop again, and only then has the gate start the command, so the command and everything it starts are
-constrained from their first instruction. The two timings are the slowdown achieved on long work. Then it times short
-tasks, as an app's clicks, keys and view switches are: sixteen of about 10 ms, each sent to the gate as a message after
-an idle gap of 20 to 32 ms and timed by the constraining process from sending it to the gate's answer, before the
-constraint and under it. A tree that is stopped when its task arrives answers late, as a slow computer does, and the
-timing doesn't depend on the gate's own timers, which wake on a 15.6 ms tick in a windowless Windows process. The
-factor is the ratio of the two medians. When either factor is more than ±25% (`--tolerance`) from the profile's, the
-command doesn't run and the exit code is 4: an app's interactions are short tasks, and a constraint that slowed only
+**CPU.** `flow-review constrain` starts a small gate process, sizes a fixed loop in it, puts it under the constraint
+and times the loop in adjacent pairs: once with the constraint lifted (the duty cycle held with the tree running, a
+hard cap set to no limit), then once under it, three pairs a measurement. The median of the pairs' factors is the
+slowdown achieved on long work. Both halves of a pair run on the computer as it is at that moment, so a runner that
+slows down for a while (another virtual machine on its host, its own background work) slows both and isn't taken for
+the constraint; one baseline taken before the constraint and compared with every later reading took it for exactly
+that. Only then does the gate start the command, so the command and everything it starts are constrained from their
+first instruction. Then it times short tasks, as an app's clicks, keys and view switches are: twelve of about 10 ms with
+the constraint lifted and sixteen under it, each sent to the gate as a message after an idle gap of 20 to 32 ms and
+timed by the constraining process from sending it to the gate's answer. A tree that is stopped when its task arrives
+answers late, as a slow computer does, and the timing doesn't depend on the gate's own timers, which wake on a 15.6 ms
+tick in a windowless Windows process. The factor is the ratio of the two medians. When long work is more than ±10%
+(`--tolerance`) from the profile's, or short tasks more than ±25% (`--burst-tolerance`), the command doesn't run and
+the exit code is 4, and the error says what each measured and after how many corrections: an app's interactions are
+short tasks, and a constraint that slowed only
 long work would read optimistic exactly where it matters. Both factors are in the banner, the summary (`cpu.achieved`,
 `cpu.burst.achieved`) and the command's `FLOW_REVIEW_CONSTRAINED` (`tree.achieved`, `tree.burst`).
 
@@ -132,8 +138,10 @@ one, it corrects both.
   2.5 ms wait took about 12 ms, a 7.5 ms one up to 95), so the slices ran long and uneven: a 10 ms task either ran
   through a long slice at full speed or waited out the long pause after it, 5–7× in the median. The cycle
   counts from when each signal has landed, so where security software inspects signals and they land late, the cycle
-  grows coarser but keeps its ratio. When the first calibration is more than 5% off, the ratio is corrected and
-  measured again, up to three times (the summary's `cpu.dutyRatio`); the factor reported is the last one measured. A
+  grows coarser but keeps its ratio. When a measurement is more than 5% off, the ratio is corrected and measured
+  again, up to six times (the summary's `cpu.dutyRatio`; every measurement is in `cpu.calibration`); each correction
+  learns from the ones before it how far the factor moves for a change in the ratio, and none moves it more than 2×
+  either way. The factor reported is the last one measured. A
   tree slowed so far beyond its ratio that the correction would take the ratio below 0.6 of the profile's is losing
   most of each run to being resumed late, as on a virtual machine that wakes a continued process a millisecond or two after the signal; there
   the period doubles instead, up to 40 ms (`cpu.dutyPeriodMs`), so each run outlasts the delay. Longer runs let more of
@@ -155,9 +163,11 @@ one, it corrects both.
 The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too. On a
 heavily loaded computer, and on Apple silicon, where a process can move between performance and efficiency cores, the
 measurement is noisier; a run that misses the tolerance doesn't run its command rather than report a false factor.
-GitHub's macOS runners are virtual machines on which the share a stopped-and-continued tree gets swings with the
-host's scheduling: at fixed settings the long factor measured anywhere from 2× to 9× within a minute, so a run there
-is often refused (exit 4) and is worth trying again. Windows and Linux runners measured 3.6–4.2× on both, run after run.
+On an idle GitHub macOS runner (an Apple M1 virtual machine) the duty cycle's signals land within about 0.1 ms and a
+busy process gets 4.0–4.25× at a 10 ms period; Linux is exact. The misses seen there came from the runner's load moving
+between a single baseline taken before the constraint and the readings after it (2.5× to 8× on long work, from one
+first reading of over 6.7× that doubled the period); the paired timings above cancel it. Windows and Linux runners
+measured 3.6–4.2× on both, run after run.
 
 **Memory.** Windows caps the tree's committed memory (private bytes), so an allocation past the cap fails, as it would
 on a computer out of memory. Linux caps resident memory and page cache and kills the largest process past it. macOS

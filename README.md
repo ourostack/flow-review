@@ -308,7 +308,8 @@ or from code: `runParity({ spec, records, page, open })`, `parityTable`, `parity
 `flow-review constrain -- <command>` runs a command, and everything it starts, as on a slow old Windows laptop (the
 `old-windows-laptop` profile): CPU 4× slower, memory capped at 2048 MB, Node's file system calls slowed, and the network
 slowed through a local proxy. It measures the CPU slowdown it achieved before the command starts, on long work and on
-10 ms tasks such as an app's clicks, and refuses to run when either is off by more than 25%, prints a banner before and after, and writes a summary (`--summary`, `flow-review
+10 ms tasks such as an app's clicks, each against the same work timed with the constraint lifted a moment before, and
+refuses to run when long work is off by more than 10% or short tasks by more than 25%, prints a banner before and after, and writes a summary (`--summary`, `flow-review
 schema constrained`) with the factor, which limits were enforced or only detected, and which were hit. Windows uses a
 job object, Linux in CI a cgroup, macOS a stop/continue duty cycle and a memory watch. Browser pages are slowed through
 DevTools: `flow-review run --constrained old-windows-laptop`, or `constrainPage` and `constrainCdp` (WebView2 too) in

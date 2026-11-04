@@ -34,19 +34,9 @@ const run = (args, env = {}) => new Promise((resolve) => {
   p.stderr.on('data', (d) => { stderr += d; });
   p.on('close', (status) => resolve({ status, stdout, stderr }));
 });
-// GitHub's macOS runners are virtual machines on which the share a stopped-and-continued process gets swings from run to
-// run (2× to 9× at fixed settings within a minute), so flow-review constrain refuses there more often (exit 4). A refused
-// run is tried again, up to three in all, and each refusal is logged: what these tests prove is that a run that goes
-// ahead was measured within tolerance on long work and on short tasks, never that one was let through outside it.
-const runConstrain = async (args, env) => {
-  let r;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    r = await run(args, env);
-    if (r.status !== 4) break;
-    console.log(`refused (exit 4), attempt ${attempt}: ${r.stderr.match(/ERROR [^\n]*/)?.[0] ?? r.stderr.trim()}`);
-  }
-  return r;
-};
+// One run, never retried: a calibration measured in adjacent pairs (the constraint lifted, then on) holds on a busy or
+// drifting runner, so a refusal here (exit 4) is a failure to look at, not noise to try again.
+const runConstrain = run;
 const serve = (body) => new Promise((resolve) => {
   const server = http.createServer((req, res) => { res.setHeader('cache-control', 'no-store'); res.setHeader('access-control-allow-origin', '*'); res.end(body); }).listen(0, '127.0.0.1', () => resolve(server));
 });
@@ -242,7 +232,10 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     assert.equal(summary.cpu.mechanism, expected);
     console.log(`constrain on ${summary.platform} (${summary.cpu.cpus} CPUs): ${describe(summary)}; memory ${summary.memory.mechanism} (${summary.memory.enforcement}), peak ${summary.memory.peakMB} MB`);
     assert.equal(summary.cpu.within, true);
-    assert.ok(summary.cpu.achieved >= 3 && summary.cpu.achieved <= 5, `measured ${summary.cpu.achieved}×`);
+    assert.ok(summary.cpu.achieved >= 3.6 && summary.cpu.achieved <= 4.4, `measured ${summary.cpu.achieved}×, not within 4× ±10%`);
+    assert.equal(summary.cpu.calibration.length, summary.cpu.corrections + 1, 'every measurement is in the summary');
+    assert.equal(summary.cpu.calibration.at(-1).achieved, summary.cpu.achieved, 'and the last is the factor reported');
+    assert.equal(summary.cpu.factors.length, 3, 'three pairs a measurement');
     assert.equal(summary.cpu.burst.within, true);
     assert.ok(summary.cpu.burst.achieved >= 3 && summary.cpu.burst.achieved <= 5, `10 ms tasks measured ${summary.cpu.burst.achieved}×`);
     assert.equal(summary.cpu.dutyCycle, true, 'every CPU mechanism has a duty cycle, so short tasks are slowed from their start');
@@ -294,7 +287,7 @@ test('a constraint that lets short tasks run at full speed is refused, and the c
   assert.ok(summary.cpu.burst.achieved < 3, `10 ms tasks measured ${summary.cpu.burst.achieved}×, not let through`);
   assert.equal(summary.cpu.burst.within, false);
   assert.equal(summary.cpu.within, false);
-  assert.match(summary.error, /on 10 ms tasks, outside 4× ±25%: the command didn't run/);
+  assert.match(summary.error, /on 10 ms tasks \(±25% allowed\)[^\n]*against 4×: the command didn't run/);
   assert.equal(summary.ok, false);
   assert.equal(summary.exitCode, null);
   assert.equal(fs.existsSync(marker), false, 'the command never ran');
@@ -375,7 +368,7 @@ test('flow-review constrain kills what the command left running when it exits', 
   const summaryFile = path.join(scratch, 'left-exit-summary.json');
   fs.rmSync(pidsFile, { force: true });
   // About what is killed, not the factor: a wide tolerance, so a noisy host's measurement doesn't stop the command running.
-  const r = await runConstrain(['constrain', '--tolerance', '0.99', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
+  const r = await runConstrain(['constrain', '--tolerance', '0.99', '--burst-tolerance', '0.99', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
   assert.equal(r.status, 0, r.stderr);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   assert.deepEqual(validate('constrained', summary), []);
@@ -426,11 +419,8 @@ test('a harness killed by a signal while launchConstrained runs leaves nothing r
   // The duty cycle, so the tree is stopped three quarters of the time when the signal lands; a wide tolerance, as the test
   // is about what the signal leaves behind, not the factor.
   const script = `import { launchConstrained } from ${JSON.stringify(lib)};
-let run;
-for (let attempt = 1; attempt <= 3; attempt++) {
-  run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', tolerance: 0.99, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
-  try { await run.ready; break; } catch (e) { if (attempt === 3 || !/outside/.test(e.message)) throw e; await run.done; }
-}
+const run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', tolerance: 0.99, burstTolerance: 0.99, overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
+await run.ready;
 console.log('READY');
 await run.done;`;
   const harness = spawn(process.execPath, ['--input-type=module', '-e', script], { cwd: root, env: { ...process.env, [CONSTRAINED_ENV]: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
