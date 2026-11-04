@@ -1,7 +1,7 @@
 name: constrain-probe
 on:
   push:
-    branches: [probe-final]
+    branches: [probe-mac]
 permissions:
   contents: read
 jobs:
@@ -13,8 +13,6 @@ jobs:
       matrix:
         include:
           - { os: macos-latest, mech: duty-cycle }
-          - { os: ubuntu-latest, mech: duty-cycle }
-          - { os: ubuntu-latest, mech: auto }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

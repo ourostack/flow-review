@@ -33,7 +33,31 @@ async function calibrate(version) {
   return s.cpu;
 }
 
-const scenarios = {
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+// Busy processes at a higher priority than the tree (nice -10, with the runner's sudo), as system daemons may be.
+const priorityBusy = (n, ms) => Array.from({ length: n }, () => spawn('sudo', ['-n', 'nice', '-n', '-10', process.execPath, '-e', `const end = Date.now() + ${ms}; let x = 0; while (Date.now() < end) x++;`], { stdio: 'ignore' }));
+// As Tandem's job does just before calibrating: a fresh app bundle of a few hundred MB, signed ad hoc, which macOS's
+// security and indexing services then examine.
+let bundleN = 0;
+function postBuild() {
+  const dir = path.join(process.env.RUNNER_TEMP ?? '.', `probe-${bundleN++}`, 'Probe.app', 'Contents', 'MacOS');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.copyFileSync(process.execPath, path.join(dir, 'Probe'));
+  for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(dir, `blob${i}.dylib`), Buffer.alloc(40 * 1024 * 1024, i + 1));
+  execFileSync('codesign', ['--force', '--deep', '--sign', '-', path.resolve(dir, '../..')], { stdio: 'ignore' });
+  try { execFileSync('spctl', ['--assess', '--type', 'execute', path.resolve(dir, '../..')], { stdio: 'ignore' }); } catch {}
+}
+const scenarios = process.platform === 'darwin' ? {
+  'priority-steady': () => { const ps = priorityBusy(cpus, 600_000); return () => { stopAll(ps); try { execFileSync('sudo', ['-n', 'pkill', '-f', 'let x = 0; while']); } catch {} }; },
+  'priority-comes-and-goes': () => {
+    let live = []; let stopped = false;
+    (async () => { while (!stopped) { live = priorityBusy(cpus, 1200); await sleep(3000); } })();
+    return () => { stopped = true; try { execFileSync('sudo', ['-n', 'pkill', '-f', 'let x = 0; while']); } catch {} };
+  },
+  'post-build': () => { postBuild(); return () => {}; },
+} : {
   idle: () => () => {},
   steady: () => { const ps = busy(cpus, 600_000); return () => stopAll(ps); },
   'comes-and-goes': () => intermittent(cpus, 1200, 1800),
