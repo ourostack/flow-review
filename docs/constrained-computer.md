@@ -155,6 +155,9 @@ one, it corrects both.
 The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too. On a
 heavily loaded computer, and on Apple silicon, where a process can move between performance and efficiency cores, the
 measurement is noisier; a run that misses the tolerance doesn't run its command rather than report a false factor.
+GitHub's macOS runners are virtual machines on which the share a stopped-and-continued tree gets swings with the
+host's scheduling: at fixed settings the long factor measured anywhere from 2× to 9× within a minute, so a run there
+is often refused (exit 4) and is worth trying again. Windows and Linux runners measured 3.6–4.2× on both, run after run.
 
 **Memory.** Windows caps the tree's committed memory (private bytes), so an allocation past the cap fails, as it would
 on a computer out of memory. Linux caps resident memory and page cache and kills the largest process past it. macOS

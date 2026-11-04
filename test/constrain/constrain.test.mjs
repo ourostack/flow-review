@@ -34,6 +34,19 @@ const run = (args, env = {}) => new Promise((resolve) => {
   p.stderr.on('data', (d) => { stderr += d; });
   p.on('close', (status) => resolve({ status, stdout, stderr }));
 });
+// GitHub's macOS runners are virtual machines on which the share a stopped-and-continued process gets swings from run to
+// run (2× to 9× at fixed settings within a minute), so flow-review constrain refuses there more often (exit 4). A refused
+// run is tried again, up to three in all, and each refusal is logged: what these tests prove is that a run that goes
+// ahead was measured within tolerance on long work and on short tasks, never that one was let through outside it.
+const runConstrain = async (args, env) => {
+  let r;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    r = await run(args, env);
+    if (r.status !== 4) break;
+    console.log(`refused (exit 4), attempt ${attempt}: ${r.stderr.match(/ERROR [^\n]*/)?.[0] ?? r.stderr.trim()}`);
+  }
+  return r;
+};
 const serve = (body) => new Promise((resolve) => {
   const server = http.createServer((req, res) => { res.setHeader('cache-control', 'no-store'); res.setHeader('access-control-allow-origin', '*'); res.end(body); }).listen(0, '127.0.0.1', () => resolve(server));
 });
@@ -219,7 +232,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
     // isn't taken for the baseline.
     const plainGrandchildMs = () => JSON.parse(spawnSync(process.execPath, [fixture('tree.mjs'), String(iterations)], { encoding: 'utf8', env: { ...process.env, [CONSTRAINED_ENV]: '' } }).stdout.split('TREE ')[1].split('\n')[0]).grandchildMs;
     const plain = [plainGrandchildMs()];
-    const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
+    const r = await runConstrain(['constrain', '--summary', summaryFile, '--', 'node', fixture('tree.mjs'), String(iterations), `http://127.0.0.1:${site.address().port}/`]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stderr, /CONSTRAINED COMPUTER \(old-windows-laptop\): CPU 4× slower \(measured [\d.]+×, 10 ms tasks [\d.]+×, (job-duty-cycle|cgroup-cpu-max|duty-cycle)\)/, 'a banner before');
     assert.match(r.stderr, /CONSTRAINED COMPUTER [^\n]*: exit 0; no caps hit/, 'and after');
@@ -256,7 +269,7 @@ test('flow-review constrain: the whole tree runs about 4× slower, proven by mea
 test("flow-review constrain: the platform's other CPU mechanism", { skip: process.platform === 'darwin' && 'macOS has only the duty cycle', timeout: 60_000 }, async () => {
   const other = process.platform === 'win32' ? ['hard-cap', 'job-cpu-rate'] : ['duty-cycle', 'duty-cycle'];
   const summaryFile = path.join(scratch, 'other.json');
-  const r = await run(['constrain', '--cpu-mechanism', other[0], '--summary', summaryFile, '--', 'node', '-e', '0']);
+  const r = await runConstrain(['constrain', '--cpu-mechanism', other[0], '--summary', summaryFile, '--', 'node', '-e', '0']);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   console.log(`${other[0]} on ${summary.platform}: ${describe(summary)}`);
   assert.equal(summary.cpu.mechanism, other[1]);
@@ -361,7 +374,7 @@ test('flow-review constrain kills what the command left running when it exits', 
   const pidsFile = path.join(scratch, 'left-exit.json');
   const summaryFile = path.join(scratch, 'left-exit-summary.json');
   fs.rmSync(pidsFile, { force: true });
-  const r = await run(['constrain', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
+  const r = await runConstrain(['constrain', '--summary', summaryFile, '--', 'node', fixture('leave-running.mjs'), pidsFile, 'exit']);
   assert.equal(r.status, 0, r.stderr);
   const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
   assert.deepEqual(validate('constrained', summary), []);
@@ -411,8 +424,11 @@ test('a harness killed by a signal while launchConstrained runs leaves nothing r
   const lib = pathToFileURL(path.join(root, 'lib', 'constrain.mjs')).href;
   // The duty cycle, so the tree is stopped three quarters of the time when the signal lands.
   const script = `import { launchConstrained } from ${JSON.stringify(lib)};
-const run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
-await run.ready;
+let run;
+for (let attempt = 1; attempt <= 3; attempt++) {
+  run = launchConstrained(process.execPath, [${JSON.stringify(fixture('leave-running.mjs'))}, ${JSON.stringify(pidsFile)}, 'stay'], { cpuMechanism: 'duty-cycle', overrides: { memoryMB: 0, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null });
+  try { await run.ready; break; } catch (e) { if (attempt === 3 || !/outside/.test(e.message)) throw e; await run.done; }
+}
 console.log('READY');
 await run.done;`;
   const harness = spawn(process.execPath, ['--input-type=module', '-e', script], { cwd: root, env: { ...process.env, [CONSTRAINED_ENV]: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
