@@ -148,10 +148,10 @@ public static class FlowReviewJob {
   static void Duty(IntPtr job) {
     // Opts this process out of Windows 11's power throttling, which slows a windowless process's timers and may put it
     // on efficiency cores: the beat has to keep time.
+    timeBeginPeriod(1);
     if (!probeSleep) {
     PowerThrottling pt = new PowerThrottling(); pt.Version = 1; pt.ControlMask = POWER_THROTTLING_EXECUTION_SPEED | POWER_THROTTLING_IGNORE_TIMER_RESOLUTION; pt.StateMask = 0;
     SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref pt, (uint)Marshal.SizeOf(typeof(PowerThrottling)));
-    timeBeginPeriod(1);
     timer = CreateWaitableTimerExW(IntPtr.Zero, IntPtr.Zero, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     if (timer != IntPtr.Zero) timerKind = "high-resolution";
     }
