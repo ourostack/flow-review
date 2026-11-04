@@ -2,7 +2,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { checks, expectNoFindings } from '../lib/index.mjs';
-import { pageWith, failing, close } from './helpers.mjs';
+import { pageWith, failing, close, ENGINE } from './helpers.mjs';
 
 after(close);
 
@@ -166,8 +166,9 @@ test('cls', async () => {
   await good.context().close();
   const bad = await pageWith(late);
   await bad.waitForTimeout(600);
-  const [f] = failing(await checks.cls(bad));
-  assert.ok(f.measured > 0.1, JSON.stringify(f));
+  const all = await checks.cls(bad);
+  const [f] = failing(all);
+  assert.ok(f?.measured > 0.1, JSON.stringify(all));
   await bad.context().close();
 });
 
@@ -183,7 +184,8 @@ test('jank: long tasks and slow frames in motion', async () => {
   await bad.context().close();
 });
 
-test('jank: slow frames count when the page made them slow, not when they waited on raster', async () => {
+// WebKit has no long-animation-frame timing, so every slow frame counts there (README, Engines).
+test('jank: slow frames count when the page made them slow, not when they waited on raster', { skip: ENGINE === 'webkit' && 'WebKit has no long animation frames: every slow frame counts' }, async () => {
   const page = await pageWith('<main><p>Moving</p></main>');
   const supported = await page.evaluate(() => window.__fr.loafSupported);
   assert.ok(supported, 'Chromium reports long animation frames');

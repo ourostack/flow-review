@@ -1,6 +1,6 @@
 # flow-review
 
-Deterministic review of user and agent flows. A repository declares its flows in `flows/`; flow-review runs each one across a matrix of viewports, themes and reduced motion, measures it with fixed checks, and writes JSON with a small cropped picture for every failure. Agents judge only what measurement can't decide, from packets the run prepares.
+Deterministic review of user and agent flows. A repository declares its flows in `flows/`; flow-review runs each one across a matrix of browser engines, viewports, themes and reduced motion, measures it with fixed checks, and writes JSON with a small cropped picture for every failure. Agents judge only what measurement can't decide, from packets the run prepares.
 
 It runs locally and in CI, and every check is also a plain function another repository can use as its own conformance test.
 
@@ -9,7 +9,7 @@ It runs locally and in CI, and every check is also a plain function another repo
 Node 22.18 or newer. From the product repository:
 
 ```sh
-npm install --save-dev github:ourostack/flow-review#v0.3.5 && npx playwright install --only-shell chromium
+npm install --save-dev github:ourostack/flow-review#v0.6.0 && npx playwright install --only-shell chromium
 npx flow-review run                  # flows/**/*.flow.{ts,json}
 npx flow-review run 'flows/site/*.flow.ts' --only axe,contrast --fail-on none
 ```
@@ -18,15 +18,15 @@ In CI, use the action instead ([In CI](#in-ci)): it installs everything itself.
 
 | Command | Does |
 | --- | --- |
-| `run [globs] --out report --shard k/n --fail-on any\|none\|<checks> --only <checks> --times <file> --workers n` | Runs flows. Exit 1 when a check named by `--fail-on` (or the flow's own `failOn`) fails (default `any`). |
+| `run [globs] --out report --shard k/n --engine <engines> --fail-on any\|none\|<checks> --only <checks> --times <file> --workers n` | Runs flows on each engine ([Engines](#engines)). Exit 1 when a check named by `--fail-on` (or the flow's own `failOn`) fails (default `any`). |
 | `list [globs] --shard k/n --times <file>` | Prints how shards split the units, without running. |
-| `merge <report dirs> --out report --flows <glob> --coverage gated\|strict` | Combines shard reports. Exit 3 when a gated unit didn't run exactly once ([Coverage](#coverage-cancelled-shards-and-advisory-flows)). |
+| `merge <report dirs> --out report --flows <glob> --engine <engines> --coverage gated\|strict` | Combines shard reports. Exit 3 when a gated unit didn't run exactly once ([Coverage](#coverage-cancelled-shards-and-advisory-flows)). |
 | `times <report dirs> --out flows/flow-review-times.json` | Records each unit's time, so the next run's shards balance by time. |
 | `judge --merge <answer.json> --report report` | Validates judges' rubric answers and folds them into `report.json`. |
 | `schema flow\|report\|finding\|rubric` | Prints a published JSON Schema. |
 | `validate [globs]` | Loads and checks flow files. |
 
-`FLOW_REVIEW_CHROMIUM` points at another Chromium build; `FLOW_REVIEW_CHANNEL=chrome` uses installed Chrome. `--evidence-max` caps the bytes of pictures a run keeps ([Output](#output)).
+`FLOW_REVIEW_CHROMIUM` points at another Chromium build; `FLOW_REVIEW_CHANNEL=chrome` uses installed Chrome; `FLOW_REVIEW_WEBKIT` points at another WebKit build. `--evidence-max` caps the bytes of pictures a run keeps ([Output](#output)).
 
 **No visible browser outside CI.** Every browser flow-review launches is headless, so a run never shows a window, shows a Dock or taskbar icon, or takes focus on the machine someone is working on. A request for a visible browser (`--headed`, or `PWDEBUG` set for Playwright's inspector, which launches every browser headful) is allowed only where `CI=true`. Anywhere else the run is refused before anything starts: exit 2, with an error naming the setting. flow-review never falls back to a visible window. A `cdp` flow connects to a browser that is already running and launches none; whatever `app.start` runs is the app's own command. Your own tests can hold the same rule with `launchBrowser(chromium, options)`, which launches headless by default and throws outside CI on `headless: false`, `devtools`, `--headed`, `ignoreDefaultArgs` that drops `--headless`, or Playwright's inspector (`PWDEBUG`), or with `assertHeadless(options)`, which only checks the options.
 
@@ -62,7 +62,7 @@ export default defineFlow({
 The flow file needs nothing installed: flow-review resolves `@ourostack/flow-review` itself. A `.flow.json` holds the same object (`"schema": "flow-review/0"`), checked by `flow-review schema flow`.
 
 - **`surface`:** `web` launches `app.start` (a shell command, from the working directory) and waits for `app.ready` (default `app.url`) to answer. `cdp` attaches to a running browser, Electron app or WebView at `app.cdpUrl`. `agent-cli` runs commands and `agent-http` sends requests.
-- **Steps, web and cdp:** `goto`, `act: { role, name, verb: click|press|type|hover|focus|hold, key?, text? }`, `waitFor`, `capture: { moment, region? }`, `tabTraverse`, `setTheme`, `resize`, `scroll`. Targets are found by role and accessible name first, `text` next, and a CSS `selector` last. Any step may carry `expect` (role, text, url, focus, count), `state` (`empty`, `error`, `loading`) and `route` (fixtures on top of the flow's own). A `goto`'s routes stay in force until the next `goto` or the end of the flow, so they answer what the page asks for just after it loads; any other step's last for that step only.
+- **Steps, web and cdp:** `goto`, `act: { role, name, verb: click|press|type|hover|focus|hold, key?, text? }`, `waitFor`, `capture: { moment, region? }`, `tabTraverse`, `setTheme`, `resize`, `scroll: { to: top|bottom } | { target } | { wheel, times?, intervalMs?, target? }` (wheel: real wheel input, [Engines](#engines)). Targets are found by role and accessible name first, `text` next, and a CSS `selector` last. Any step may carry `expect` (role, text, url, focus, count), `state` (`empty`, `error`, `loading`) and `route` (fixtures on top of the flow's own). A `goto`'s routes stay in force until the next `goto` or the end of the flow, so they answer what the page asks for just after it loads; any other step's last for that step only.
 - **Holding a key:** `act: { verb: "hold", key, ms?, during?: [steps] }` presses `key` and keeps it down (on the target, focused first, when the act names one), waits `ms` (default 0), takes the `during` steps, then lets it go, whatever those steps did. A `capture` among them runs its checks on the page as it is while the key is down, and a `waitFor` there can wait for the held state to show. The hold's own `expect` is checked once the key is up, so it can say what comes back. Steps inside a hold are named after it (`compare.1-waitFor`, or `4-act.1-waitFor` for a hold without an `id`) unless they have an `id` or are a capture.
 
   ```ts
@@ -82,7 +82,7 @@ The flow file needs nothing installed: flow-review resolves `@ourostack/flow-rev
   - A flow's `known` may use another runner's check names, mapped in the config's `checkAliases` (`{ "reads-stay-reads": "readOnly", "stderr": "stderrRules" }`; a dotted name also matches by what comes before the dot).
 
   A product can type its agent flows with its own definitions and extra fields: `test/fixtures/ax/` runs a flow written against its own `define.ts`, unchanged, on a stand-in mock and CLI.
-- **Matrix:** each viewport × theme × reduced-motion combination is a cell. Themes come from `prefers-color-scheme`, or from the flow's own `themeSteps` (`matrix.themeVia: "steps"`), for an app with its own toggle.
+- **Matrix:** each engine × viewport × theme × reduced-motion combination is a cell (engines come from the run's `--engine`, less any the flow's `matrix.engines` leaves out: [Engines](#engines)). Themes come from `prefers-color-scheme`, or from the flow's own `themeSteps` (`matrix.themeVia: "steps"`), for an app with its own toggle.
 - **Fixtures:** `fixtures.route` answers matching requests from a file, `json`, `body` or `status`, for the whole flow. A step's `route` adds to them: a `goto`'s until the next `goto` or the end of the flow, any other step's for that step only (a step inside a hold or the theme steps adds its own on top of the outer step's). The most specific scope answers first: the step's routes, then the `goto`'s, then the flow's, and within each the first pattern that matches. A step's route that no request matched before then is an `unusedRoute` finding, which is advisory: it never fails the run. Requests to other origins are aborted (`app.blockExternal: false` allows them), so runs don't depend on the network.
 - **After a goto:** `app.readyAfterGoto` says what a `goto` waits for once the page has navigated: `"load"` (the default), `"domcontentloaded"`, `"networkidle"`, or a target such as `{ "selector": "#plan", "ms": 10000 }` (a `role` with its `name`, `text` or `selector`, and `ms`, default 15000; a longer `ms` lengthens the goto's step and cell limits to match). `networkidle` is opt-in. It waits up to 3 s and never comes while the page holds a stream open (live updates read through `fetch`, for example), so it would cost those 3 s on every goto. Whatever the choice, every goto, `waitFor`, act and capture then waits for fonts, the images on screen and running animations, plus two frames, so no layout shift is pending. A page that fills in after load (data it fetches) is caught by the flow's next `waitFor` or a declared `state`, or by a target here.
 - **Time limits:** `timeouts: { cellMs, stepMs }`. A cell (one matrix cell, or an agent flow's one unit) may take `cellMs` (default 120000, or the flow's longest `waitFor.ms` or step `timeoutMs`, counting a hold's `ms` and the steps it holds the key for, and 30 s more when that is longer and no `cellMs` is set), counted once its app is up (`app.readyTimeoutMs` bounds the start). Past it, the engine stops the cell: it closes its page (a `cdp` browser is only disconnected), kills its running command, and stops its app when the app is the flow's own (`scope: "flow"`) or no longer answers its ready URL, so the next cell starts it afresh. A `timeout` finding names the step it was on, that step's target and the time, and the run goes on with the next cell, so a shard always finishes and writes its report. A step may take `stepMs` (default 60000): a `goto`, `act` or `waitFor` that hangs fails that step, naming its target in `selector`. A `waitFor` with a longer `ms` gets that `ms` and 5 s more (a hold's `ms` likewise, for pressing the key; each step it holds the key for has its own limit), and an agent step's own `timeoutMs` wins. A flow's `timeouts` go over its config's.
@@ -141,6 +141,61 @@ flow-review run 'flows/agent/**/*.flow.ts' --target dist/inbox-1.3.0/bin/inbox.m
 - `--slack 2` doubles every `maxMs`, for a slow machine, and is recorded.
 - The action takes `target`, `target-version` and `slack`, so a release workflow can call it after building a candidate.
 
+## Engines
+
+People see a product through their own browser engine, and a page smooth on one can stall on another: a list that waits on its wheel listener only where the browser can't yield to rendering is smooth in Chromium and stuck in Safari. Every flow-review run that judges what people see should run on the engines the product ships on.
+
+`--engine` (the action's `engine`, or `FLOW_REVIEW_ENGINE`) names them, as one more matrix dimension; the default is `chromium`:
+
+| Engine | What it is | What it stands for |
+| --- | --- | --- |
+| `chromium` | Playwright's Chromium (headless shell) | Chrome; Chromium-based shells |
+| `webkit` | Playwright's WebKit | Safari, and WKWebView in a Mac or iOS app |
+| `msedge` | the installed Microsoft Edge (Playwright's `msedge` channel) | Edge, and WebView2 in a Windows app |
+
+```sh
+npx playwright install --only-shell chromium && npx playwright install --with-deps webkit
+npx flow-review run --engine chromium,webkit,msedge
+```
+
+- **Keys.** A cell's key ends `@<engine>` (`flows/a.flow.ts#390x844-light-rm@webkit`), except on Chromium, whose keys are as they were before engines, so recorded times and earlier reports still match. Every finding's `cell` names its `engine`, so findings, evidence and states are keyed by engine.
+- **Reports.** `report.json`'s `engines` has each engine's units, failures, findings by check, `gaps` (below) and `notRun`; each table row's `byEngine` has that flow's results per engine, and `provenance.browsers` each browser's version. The summary puts the engines side by side when a run has more than Chromium.
+- **Sharding and merging.** Shards split all cells, every engine's together; or give each job its own engine (`engine: webkit` on a Mac runner, `engine: msedge` on a Windows one) and merge them with every engine named: `merge --engine chromium,webkit,msedge`. Name them: an engine whose every shard was cancelled left no report to say it was expected.
+- **Leaving an engine out.** A flow's `matrix.engines` lists the engines it may run on. A `cdp` flow attaches over the DevTools protocol, so it runs on `chromium` and `msedge` only (point `app.cdpUrl` at the WebView2 or Edge the cell names). What a run names that a flow leaves out is listed in `engines.<engine>.notRun` and the summary, never dropped quietly.
+- **A few cells on an engine.** An engine that stands in for one Chromium already covers (Edge for WebView2, say) can run fewer cells: `"engines": { "msedge": { "cells": ["1280x800-light"] } }` in `flow-review.config.json` runs each flow on msedge only in the named cells (`viewport-theme`, `-rm` for reduced motion). The cells left out are in `engines.msedge.notRun` (with `cells`) and the summary; `list` and `merge` count units the same way.
+- **An engine that can't launch** (Edge not installed, say) fails each of its cells with the reason; the other engines' cells still run.
+- **Wheel input.** `{ scroll: { wheel: 120, times: 10, intervalMs: 50, target } }` turns the mouse wheel over the target (or the middle of the view) as a person does, on every engine, so a page's own wheel listeners run and the `jank` check judges the frames while it scrolls.
+
+### Known-failing cells
+
+Turning on an engine shows what already fails there. Those are bugs, not cells to skip: list each in `flows/flow-review-known-failing.json` (or `--known-failing <file>`, the action's `known-failing`), with its issue and owner, in the shape the basics gate and window tests share:
+
+```json
+{ "about": "Cells that fail on an engine today. The list only shrinks.",
+  "entries": [{ "case": "flows/app/scroll.flow.ts", "legs": ["webkit"], "issue": "#1823", "owner": "Chat scrolling (lane)", "why": "dead input scrolling a long channel" }] }
+```
+
+- `case` is a flow file (every cell of that flow) or `<file>:<cell name>` (`flows/app/scroll.flow.ts:390x844-light-rm`), split at the first `.flow.<ext>:`; `legs` are engines. `enforce` (default true) false makes what comes off advisory.
+- A listed cell's failing findings carry `known` (the issue) and `knownCase`, and never fail the run. Every other failure still does.
+- An unsharded run without `--cells` or `--only`, and a merge, judge each listed case on each leg the run names (`knownFailing.notJudged` lists the others): one whose cells no longer fail, or that no longer runs, is a failing `known` finding, so its entry comes off in the pull request that fixes it. (A cell a cancelled shard left missing is a coverage finding instead.) Put `known` in `--fail-on` to fail on it. `report.json`'s `knownFailing` and the summary say which still fail and which come off.
+- `flow-review known-failing --check <file> --base <base branch's file>` fails when the list grew: it only shrinks. Nothing is skipped and no limit loosened.
+
+Every check runs on every engine and means the same there. Where WebKit lacks what Chromium measures with, flow-review measures another way, never more loosely, and says so: the `method` on the finding, and `engines.webkit.gaps` in the report.
+
+| Check | WebKit lacks | flow-review on WebKit |
+| --- | --- | --- |
+| `cls` | the Layout Instability API (`layout-shift` entries) | After anything that can move content (a DOM change, a load, a resize, a font, a running transition or animation), each frame reads where the content in view is (every element whose box meets the view, up to 1500, and a grid of hit tests; the reading costs the main thread a little each such frame) and scores what moved as the API scores a shift: the share of the view the moved elements cover, before and after, times the furthest move over the view's longer side. An element counts as moved when it moved 3 px or more on screen and in layout, so a transform or a scroll isn't a shift; shifts within 500 ms of a key or pointer press are left out, as `hadRecentInput` does. `method: "sampled"` (Chromium: `"layout-shift"`). A shift in the same frame as a scroll isn't seen |
+| `jank` (long tasks) | the Long Tasks API | A timer due every 16 ms runs late by as long as the main thread was held; the lateness, plus 16 ms (an upper bound), is the long task. `method: "timer, …"` (Chromium: `"longtask"`) |
+| `jank` (slow frames) | Long Animation Frames | A slow frame can't be told apart as waiting on raster, so every frame over `frameMs` counts: stricter than Chromium, never looser. `method` says `no raster split` |
+| `keyboard`, `focusVisible` | Tab to every item: WebKit, as Safari and WKWebView ship, moves Tab only between text fields and lists unless the Mac's Keyboard navigation setting is on | Traversals press Option-Tab (`Alt+Tab`), which reaches every item as Tab does in Chromium; a flow step pressing `Tab` or `Shift+Tab` is pressed with Option too |
+| constrained mode | the DevTools protocol, which throttles pages' CPU and network | A constrained run on WebKit needs `flow-review constrain` around it, which slows the whole process tree; without it the run is refused (exit 2) rather than run at full speed under a constrained banner |
+| `cdp` flows | the DevTools protocol | They run on `chromium` and `msedge` only, listed in `engines.webkit.notRun` |
+| `duoBytes` | resource-timing sizes for some responses (one a route answered, say) | An asset fetched with no size is read again from the cache and its body counted (`method` says so), never counted as 0 bytes |
+| `errors` | (Playwright puts a style sheet in the page for each WebKit screenshot, which a strict `style-src` refuses) | That one console error is left out while flow-review's own screenshot is being taken; the page's own refused styles still fail. A request the page gave up is `cancelled` in WebKit on macOS and `Load request cancelled` on Linux (`net::ERR_ABORTED` in Chromium) and isn't a failure on either. `states` knows WebKit's stack lines (`fn@url:line:col`) as raw errors, as it knows Chromium's |
+| evidence | WebP encoding in a canvas | Crops and moments are PNG, scaled down until they fit the size cap |
+
+`axe`, `contrast`, `targetSize`, `overflow`, `deadSpace`, `repetition`, `designSystem`, `proofNotice`, `states`, `errors` and the duo's checks are the page's own DOM, styles and pixels, and measure the same on every engine. Frame times come from `requestAnimationFrame` and input times from each event's `timeStamp`, both on `performance.now()`'s clock on every engine, so an in-page frame meter reads the same everywhere; CI runs the whole test suite on Chromium and on WebKit, and a fixture list that stalls each wheel only on WebKit, which must fail there and pass on Chromium.
+
 ## Checks
 
 Checks run at every `capture` and at the end of the flow. Keyboard and focus run at each `tabTraverse`, or at the end when a flow has none. `states` runs after every step that declares one. Every threshold is the flow's to set, in `checks.thresholds`.
@@ -197,7 +252,7 @@ Each one also records whether it holds its Moment: `[data-moment="<kind>"]`, or 
 `report/`:
 
 - `report.json` (`flow-review-report/0`): the summary (counts per check, human and agent sides), a table per flow, every unit with its time, key moments, `attachments[]` (external reports such as an Ouro AX X-ray), judges' answers and timing.
-- `findings.jsonl`: one finding a line, `{ flow, step, surface, cell, check, pass, measured, threshold, selector, label, evidence, fix, ms }`. `cell` is `{ viewport, theme, reducedMotion }`, or null on the agent side.
+- `findings.jsonl`: one finding a line, `{ flow, step, surface, cell, check, pass, measured, threshold, selector, label, evidence, fix, method, ms }`. `cell` is `{ viewport, theme, reducedMotion, engine }`, or null on the agent side; `method` says how the engine measured a check where engines differ ([Engines](#engines)).
 - `evidence/`: a crop around each failing element with a red box, PNG or WebP under 300 KB (at most 3 per check per capture, 40 per unit).
 - `moments/`: the pictures of the captures a judge packet names, WebP, at most 1600 px wide. `report.json`'s `captures[]` lists every capture, with its `crop` only when it kept the picture.
 - **The evidence cap.** A run (a shard) keeps pictures only for failing findings and for the key moments its judge packets name; a passing check has none, and a flow without a rubric keeps no moments. They are kept in that order, failing findings' crops first, up to `--evidence-max` bytes (default 1 MB; also `FLOW_REVIEW_EVIDENCE_MAX` or the action's `evidence-max`; `none` for no cap). `report.json`'s `evidence` records what was kept (`bytes`, `files`), what the cap dropped (`dropped: { evidence, moments, bytes }`) and how many captures no packet named (`unjudgedMoments`). A merge adds up its shards' and lists each in `shards[]`. The summary and the action warn when the cap dropped anything. This keeps shard artifacts small, so a merge downloads them quickly.
@@ -208,7 +263,7 @@ Each one also records whether it holds its Moment: `[data-moment="<kind>"]`, or 
 
 To let some checks block merges and keep the rest advisory, including without admin rights on the repository, see [Gating merges](docs/gating.md).
 
-The action (`action.yml`, `uses: ourostack/flow-review@<tag or commit>`) installs flow-review and Chromium (cached by Playwright version), runs, uploads `report/` as an artifact, writes the summary to the job, and fails per `fail-on`. Pin it to a release tag, or to the tag's commit:
+The action (`action.yml`, `uses: ourostack/flow-review@<tag or commit>`) installs flow-review and the browsers its `engine` input names (Playwright's Chromium and WebKit, cached by Playwright version, with WebKit's system libraries on Linux; the runner's Microsoft Edge for `msedge`), runs, uploads `report/` as an artifact, writes the summary to the job, and fails per `fail-on`. Pin it to a release tag, or to the tag's commit:
 
 ```yaml
 jobs:
@@ -217,8 +272,8 @@ jobs:
     strategy: { fail-fast: false, matrix: { shard: [1/4, 2/4, 3/4, 4/4] } }
     steps:
       - uses: actions/checkout@v4
-      - uses: ourostack/flow-review@v0.3.5
-        with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", fail-on: none }
+      - uses: ourostack/flow-review@v0.6.0
+        with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", engine: "chromium,webkit", fail-on: none }
   merge:
     needs: review
     runs-on: ubuntu-latest
@@ -226,8 +281,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "flow-review-*-of-*", path: shards }
-      - uses: ourostack/flow-review@v0.3.5
-        with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", fail-on: none }
+      - uses: ourostack/flow-review@v0.6.0
+        with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", engine: "chromium,webkit", fail-on: none }
 ```
 
 Where a repository's Actions policy doesn't allow outside actions, copy this repository at a release tag into the repository as a local action (`uses: ./.github/actions/flow-review`) and record the tag and commit beside it.
@@ -324,11 +379,11 @@ isn't slowed, and why it loads nothing but the tree it slows.
 npm ci && npx playwright install --only-shell chromium && npm test
 ```
 
-The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers. The constrained-computer tests (`npm run test:constrain`, last in `npm test`) measure speed, so they run on their own, one at a time, and only where `flow-review constrain` may run (CI, or a declared sandbox; elsewhere they are skipped); CI runs them on Windows, macOS and Linux. `test/no-load-generators.test.mjs` fails any harness here that spawns `yes`, `stress` or `stress-ng`, or loops without end.
+The tests plant one defect per check in a fixture page and check that the check fails it and passes the clean page, on Chromium and (in CI, `FLOW_REVIEW_ENGINE=webkit`) on WebKit, and run the CLI end to end on a fixture app (`test/fixtures/`): sharding, merge, the coverage guard, time limits and judge answers. The constrained-computer tests (`npm run test:constrain`, last in `npm test`) measure speed, so they run on their own, one at a time, and only where `flow-review constrain` may run (CI, or a declared sandbox; elsewhere they are skipped); CI runs them on Windows, macOS and Linux. `test/no-load-generators.test.mjs` fails any harness here that spawns `yes`, `stress` or `stress-ng`, or loops without end.
 
 ## Not in v0 yet
 
-Electron launch (use `cdp`), YAML flows, component-boundary contrast for form fields, a pixel-level focus-ring contrast measure, Chrome trace-based frame timing (frames come from requestAnimationFrame sampling, attributed with long-animation-frame timing), and per-step check overrides.
+Electron launch (use `cdp`), driving a native WKWebView or WebView2 app window directly (WebKit and Edge stand for them; a WebView2 is reachable as a `cdp` flow), YAML flows, component-boundary contrast for form fields, a pixel-level focus-ring contrast measure, Chrome trace-based frame timing (frames come from requestAnimationFrame sampling, attributed with long-animation-frame timing), and per-step check overrides.
 
 ## Contributing and licence
 

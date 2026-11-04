@@ -38,7 +38,7 @@
       "type": "object",
       "required": ["viewport", "theme", "reducedMotion"],
       "additionalProperties": false,
-      "properties": { "viewport": { "type": "string" }, "theme": { "enum": ["light", "dark"] }, "reducedMotion": { "type": "boolean" } }
+      "properties": { "viewport": { "type": "string" }, "theme": { "enum": ["light", "dark"] }, "reducedMotion": { "type": "boolean" }, "engine": { "enum": ["chromium", "webkit", "msedge"] } }
     }
   }
 }

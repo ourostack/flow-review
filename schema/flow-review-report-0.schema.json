@@ -18,6 +18,28 @@
     "schema": {
       "const": "flow-review-report/0"
     },
+    "knownFailing": {
+      "description": "The known-failing list the run read: its file, whether it is enforced, its entries, and, when the run judged it (unsharded, or a merge), how many still fail, and which pass now or no longer run (each also a failing known finding).",
+      "type": "object",
+      "properties": { "file": { "type": ["string", "null"] }, "enforce": { "type": "boolean" }, "entries": { "type": "integer" }, "judged": { "type": "boolean" }, "failing": { "type": "integer" }, "passes": { "type": "array", "items": { "type": "string" } }, "notRun": { "type": "array", "items": { "type": "string" } }, "notJudged": { "type": "array", "items": { "type": "string" }, "description": "Listed case@leg pairs on an engine the run didn't name." } }
+    },
+    "engines": {
+      "description": "Per browser engine: its units, failing and advisory findings, findings by check, what it measures differently (gaps) and the flows that didn't run on it (notRun). Absent from reports before engines.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["units", "failures", "byCheck", "gaps", "notRun"],
+        "properties": {
+          "units": { "type": "integer" },
+          "failures": { "type": "number" },
+          "advisories": { "type": "number" },
+          "known": { "type": "number", "description": "Of the failures, those known (a known mark or the known-failing list): they never fail the run." },
+          "byCheck": { "type": "object" },
+          "gaps": { "type": "array", "items": { "type": "object", "required": ["check", "what", "instead"], "properties": { "check": { "type": "string" }, "what": { "type": "string" }, "instead": { "type": "string" } } } },
+          "notRun": { "type": "array", "items": { "type": "object", "required": ["flow", "why"], "properties": { "flow": { "type": "string" }, "file": { "type": ["string", "null"] }, "why": { "type": "string" }, "cells": { "type": "array", "items": { "type": "string" }, "description": "Only these cells were left out (the config's engines.<engine>.cells); without cells, the whole flow." } } } }
+        }
+      }
+    },
     "tool": {
       "type": "object",
       "required": [
@@ -398,6 +420,13 @@
         },
         "reducedMotion": {
           "type": "boolean"
+        },
+        "engine": {
+          "enum": [
+            "chromium",
+            "webkit",
+            "msedge"
+          ]
         }
       }
     }

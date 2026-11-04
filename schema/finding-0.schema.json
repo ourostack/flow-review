@@ -15,7 +15,7 @@
         {
           "type": "object",
           "required": ["viewport", "theme", "reducedMotion"],
-          "properties": { "viewport": { "type": "string" }, "theme": { "enum": ["light", "dark"] }, "reducedMotion": { "type": "boolean" } }
+          "properties": { "viewport": { "type": "string" }, "theme": { "enum": ["light", "dark"] }, "reducedMotion": { "type": "boolean" }, "engine": { "enum": ["chromium", "webkit", "msedge"], "description": "The browser engine the cell ran on; a finding from before engines ran on chromium." } }
         }
       ]
     },
@@ -26,6 +26,9 @@
     "selector": { "type": "string" },
     "evidence": { "type": "string" },
     "fix": { "type": "string" },
+    "method": { "type": "string", "description": "How this engine measured the check where engines differ: cls by layout-shift entries (Chromium) or sampled positions (WebKit); jank's long tasks by longtask entries or a timer's lateness, and whether slow frames could be split from raster-bound ones." },
+    "known": { "type": "string", "description": "A known defect's issue (#N): the step's or flow's known mark, or the known-failing list's entry. Reported, never failing the run." },
+    "knownCase": { "type": "string", "description": "The known-failing list's case this finding falls under (a flow file, or <file>:<cell name>)." },
     "advisory": { "type": "boolean", "description": "An advisory finding (unusedRoute): reported, never counted by --fail-on." },
     "ms": { "type": "number" }
   }

@@ -74,7 +74,7 @@ test('a hung cell becomes a timeout finding and the shard finishes; a hung step 
 
   await t.test('the summary notes the stopped cells; a timeout fails a run that fails on any check', () => {
     assert.match(summary, /❌ \*\*2 units\*\* ran past their time limit and were stopped \(failing `timeout` findings\)/);
-    assert.match(summary, /Hang fixture: waits forever · 800x600 light reduced-motion: stopped after 3\.\d s, at step "wait"/);
+    assert.match(summary, /Hang fixture: waits forever · 800x600 light reduced-motion( webkit| msedge)?: stopped after 3\.\d s, at step "wait"/);
   });
 
   await t.test('merge: advisory timed-out cells are coverage findings, and the merge passes', () => {

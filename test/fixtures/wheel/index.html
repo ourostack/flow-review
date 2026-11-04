@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wheel fixture: a message list</title>
+<style>
+  body { margin: 0; font: 15px/1.4 system-ui, sans-serif; color: #1a1a1a; background: #fff; }
+  header { height: 48px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid #ddd; }
+  main { display: flex; flex-direction: column; height: calc(100vh - 49px); }
+  [data-list] { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  [data-row] { padding: 8px 16px; border-bottom: 1px solid #eee; }
+  [data-row] b { display: block; font-size: 13px; color: #444; }
+</style>
+</head>
+<body>
+<header><h1 style="font-size:17px;margin:0">Messages</h1></header>
+<main>
+  <section data-list aria-label="Messages" tabindex="0"></section>
+</main>
+<script>
+// A message list that keeps each row's measured height for its scroll estimates, measuring as the person scrolls. The
+// pattern is a WebKit-only stall, as a list built and tested on Chromium can ship one:
+//   - where the browser can yield to rendering (scheduler.yield, as Chromium and Edge have), each wheel measures only
+//     the rows in view, after the frame;
+//   - where it can't (WebKit, as Safari and WKWebView ship: no scheduler.yield, no requestIdleCallback), it measures
+//     every row inside the wheel listener, which isn't passive, so the wheel waits about 150 ms before anything moves.
+// In the basics gate's terms (input to motion, dead input), each wheel on WebKit is dead input: about 150 ms from the
+// wheel's timeStamp to the first frame whose scrollTop moved, where Chromium moves within a frame or two.
+const list = document.querySelector('[data-list]');
+const words = ['Sounds good to me.', 'Can you send the notes from this morning?', 'I moved the review to Thursday, the room is booked.', 'Thanks!', 'Here is the draft; the second section still needs numbers.'];
+for (let i = 0; i < 300; i++) {
+  const row = document.createElement('article');
+  row.setAttribute('data-row', '');
+  row.setAttribute('data-message-id', `m${i}`);
+  row.innerHTML = `<b>Person ${i % 7}</b>${words[i % words.length]}`;
+  list.append(row);
+}
+const rows = [...list.children];
+const heights = new Float64Array(rows.length);
+const measureRow = (i) => { rows[i].style.minHeight = ''; heights[i] = rows[i].getBoundingClientRect().height; rows[i].style.minHeight = `${heights[i]}px`; };
+const canYield = typeof globalThis.scheduler?.yield === 'function' || typeof globalThis.requestIdleCallback === 'function';
+const WAIT_MS = 150;
+list.addEventListener('wheel', async () => {
+  if (canYield) {
+    await (globalThis.scheduler?.yield?.() ?? new Promise((r) => requestIdleCallback(r)));
+    const top = list.scrollTop;
+    const bottom = top + list.clientHeight;
+    for (let i = 0; i < rows.length; i++) if (rows[i].offsetTop + rows[i].offsetHeight >= top && rows[i].offsetTop <= bottom) measureRow(i);
+    return;
+  }
+  // Every row, over and over until the measurements agree: here about WAIT_MS, bounded by the pass count.
+  const until = performance.now() + WAIT_MS;
+  for (let pass = 0; pass < 200 && performance.now() < until; pass++) for (let i = 0; i < rows.length; i++) measureRow(i);
+}, { passive: false });
+</script>
+</body>
+</html>

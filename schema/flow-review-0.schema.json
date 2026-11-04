@@ -235,6 +235,19 @@
             "emulate",
             "steps"
           ]
+        },
+        "engines": {
+          "description": "The engines this flow may run on (default: every engine the run names). An engine the run names that this list leaves out doesn't run, and is listed in report.json's engines.<engine>.notRun.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "chromium",
+              "webkit",
+              "msedge"
+            ]
+          }
         }
       }
     },
@@ -954,7 +967,24 @@
               ]
             },
             "target": {
-              "$ref": "#/definitions/target"
+              "$ref": "#/definitions/target",
+              "description": "Scrolled into view; with wheel, where the pointer is when the wheel turns."
+            },
+            "wheel": {
+              "description": "Real wheel input: px per notch (+ is down). The page's own wheel listeners run, and the jank check judges the frames.",
+              "type": "number"
+            },
+            "times": {
+              "description": "How many wheel notches (default 10).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "intervalMs": {
+              "description": "Between wheel notches (default 50).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2000
             }
           }
         }

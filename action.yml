@@ -10,6 +10,12 @@ inputs:
   shard:
     description: This job's shard, k/n.
     default: 1/1
+  engine:
+    description: Comma list of browser engines every web flow runs on (chromium, webkit, msedge), one more matrix dimension. webkit is Playwright's WebKit (WKWebView, Safari); msedge is the runner's Microsoft Edge (WebView2). Default chromium. For merge, the engines whose units are expected (default every engine a shard report ran; pass it, since an engine whose every shard was cancelled left no report).
+    default: ''
+  known-failing:
+    description: A known-failing list (default flows/flow-review-known-failing.json when it is there, relative to working-directory). Its cells' failures are reported as known; a listed case that passes, or no longer runs, is a failing known finding (in an unsharded run, and in merge).
+    default: ''
   fail-on:
     description: any, none, or a comma list of checks that fail the step.
     default: any
@@ -77,17 +83,64 @@ runs:
       run: |
         npm ci --prefix "$GITHUB_ACTION_PATH" --omit=dev --no-audit --no-fund --ignore-scripts --loglevel=error
         echo "playwright=$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/node_modules/playwright-core/package.json")" >> "$GITHUB_OUTPUT"
-    - name: Restore Chromium
+    # Which Playwright browsers the engines need (msedge is the runner's own Edge), for the cache key and the install.
+    - name: Browsers for the engines
       if: inputs.command == 'run'
+      id: engines
+      shell: bash
+      env:
+        ENGINE: ${{ inputs.engine }}
+      run: |
+        need=()
+        msedge=false
+        IFS=',' read -ra list <<< "${ENGINE:-chromium}"
+        for e in "${list[@]}"; do
+          e="$(echo "$e" | tr -d '[:space:]')"
+          case "$e" in
+            chromium) need+=(chromium) ;;
+            webkit) need+=(webkit) ;;
+            msedge) msedge=true ;;
+            '') ;;
+            *) echo "::error title=flow-review engine::unknown engine $e (chromium, webkit, msedge)"; exit 1 ;;
+          esac
+        done
+        echo "browsers=${need[*]}" >> "$GITHUB_OUTPUT"
+        echo "key=$(IFS=-; echo "${need[*]:-none}")" >> "$GITHUB_OUTPUT"
+        echo "msedge=$msedge" >> "$GITHUB_OUTPUT"
+    - name: Restore browsers
+      if: inputs.command == 'run' && steps.engines.outputs.browsers != ''
       id: browsers
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ~/.cache/ms-playwright
-        key: flow-review-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.install.outputs.playwright }}
-    - name: Install Chromium
-      if: inputs.command == 'run' && steps.browsers.outputs.cache-hit != 'true'
+        path: ${{ runner.os == 'Windows' && '~/AppData/Local/ms-playwright' || runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+        key: flow-review-${{ steps.engines.outputs.key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.install.outputs.playwright }}
+    - name: Install browsers
+      if: inputs.command == 'run' && steps.engines.outputs.browsers != ''
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/node_modules/playwright/cli.js" install --only-shell chromium
+      env:
+        BROWSERS: ${{ steps.engines.outputs.browsers }}
+        HIT: ${{ steps.browsers.outputs.cache-hit }}
+      run: |
+        pw=(node "$GITHUB_ACTION_PATH/node_modules/playwright/cli.js")
+        for b in $BROWSERS; do
+          if [ "$b" = chromium ]; then
+            [ "$HIT" = true ] || "${pw[@]}" install --only-shell chromium
+          elif [ "$HIT" = true ]; then
+            # The cache holds the browser; the system libraries it needs (Linux) aren't cached.
+            if [ "$RUNNER_OS" = Linux ]; then "${pw[@]}" install-deps "$b"; fi
+          else
+            "${pw[@]}" install --with-deps "$b"
+          fi
+        done
+    - name: Microsoft Edge
+      if: inputs.command == 'run' && steps.engines.outputs.msedge == 'true'
+      shell: bash
+      run: |
+        # GitHub's hosted runners have Edge; anywhere else, Playwright installs it.
+        for p in "/opt/microsoft/msedge/msedge" "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" "C:/Program Files/Microsoft/Edge/Application/msedge.exe" "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"; do
+          if [ -f "$p" ]; then echo "Microsoft Edge: $p"; exit 0; fi
+        done
+        node "$GITHUB_ACTION_PATH/node_modules/playwright/cli.js" install msedge
     - name: flow-review ${{ inputs.command }}
       id: run
       shell: bash
@@ -96,6 +149,8 @@ runs:
         CMD: ${{ inputs.command }}
         FLOWS: ${{ inputs.flows }}
         SHARD: ${{ inputs.shard }}
+        FLOW_REVIEW_ENGINE: ${{ inputs.engine }}
+        KNOWN_FAILING: ${{ inputs.known-failing }}
         FAIL_ON: ${{ inputs.fail-on }}
         ONLY: ${{ inputs.only }}
         OUT: ${{ inputs.out }}
@@ -117,11 +172,14 @@ runs:
         if [ "$CMD" = merge ]; then
           for g in "${flows[@]}"; do args+=(--flows "$g"); done
           set +e
+          [ -n "$FLOW_REVIEW_ENGINE" ] && args+=(--engine "$FLOW_REVIEW_ENGINE")
+          [ -n "$KNOWN_FAILING" ] && args+=(--known-failing "$KNOWN_FAILING")
           node "$GITHUB_ACTION_PATH/bin/flow-review.mjs" merge "${dirs[@]}" --out "$OUT" --fail-on "$FAIL_ON" --coverage "$COVERAGE" "${args[@]}"
           code=$?
           name="${ARTIFACT:-flow-review-report}"
         else
           [ -n "$ONLY" ] && args+=(--only "$ONLY")
+          [ -n "$KNOWN_FAILING" ] && args+=(--known-failing "$KNOWN_FAILING")
           [ -n "$WORKERS" ] && args+=(--workers "$WORKERS")
           [ -n "$TIMES" ] && args+=(--times "$TIMES")
           [ -n "$SLACK" ] && args+=(--slack "$SLACK")

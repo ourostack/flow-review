@@ -853,6 +853,16 @@
         }
       }
     },
+    "engines": {
+      "description": "Per engine, the cells its flows run in, by name (viewport-theme, -rm for reduced motion): an engine that stands in for one Chromium already covers (msedge, say) can run a few. The cells left out are listed in report.json's engines.<engine>.notRun, never dropped quietly.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chromium": { "$ref": "#/definitions/engineCells" },
+        "webkit": { "$ref": "#/definitions/engineCells" },
+        "msedge": { "$ref": "#/definitions/engineCells" }
+      }
+    },
     "checkAliases": {
       "type": "object",
       "additionalProperties": {
@@ -884,6 +894,14 @@
     }
   },
   "definitions": {
+    "engineCells": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cells"],
+      "properties": {
+        "cells": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[0-9]{2,5}x[0-9]{2,5}-(light|dark)(-rm)?$" } }
+      }
+    },
     "strings": {
       "type": "object",
       "additionalProperties": {

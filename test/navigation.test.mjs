@@ -14,8 +14,8 @@ const out = path.join(root, '.scratch', 'navigation');
 test('a page holding an event stream open adds no wait to a goto, unless the flow asks for networkidle', { timeout: 120_000 }, () => {
   fs.rmSync(out, { recursive: true, force: true });
   const r = spawnSync(process.execPath, ['bin/flow-review.mjs', 'run', 'test/fixtures/stream/flows/*.flow.json', '--out', out, '--fail-on', 'any'], { cwd: root, encoding: 'utf8', env: { ...process.env, FLOW_REVIEW_WORKERS: '1' } });
-  assert.equal(r.status, 0, r.stderr);
   const findings = fs.readFileSync(path.join(out, 'findings.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(r.status, 0, `${r.stderr}\n${JSON.stringify(findings.filter((f) => !f.pass).map((f) => [f.check, f.step, f.measured]))}`);
   const gotos = (flow) => findings.filter((f) => f.flow === `Stream fixture: ${flow}` && f.check === 'step' && f.measured === 'goto');
   for (const flow of ['load', 'a target']) {
     assert.equal(gotos(flow).length, 3);
