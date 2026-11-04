@@ -464,7 +464,7 @@ export interface ConstrainedRun {
   done: Promise<ConstrainedSummary>;
   stop(signal?: string): void;
 }
-export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null; timeoutMinutes?: number }
+export interface ConstrainOptions { settings?: ConstrainedSettings; profile?: string; overrides?: ConstrainedOverrides; tolerance?: number; cpuMechanism?: "auto" | "duty-cycle" | "hard-cap"; periodMs?: number; calibrateMs?: number; cwd?: string; env?: Record<string, string | undefined>; summary?: string | null; log?: ((line: string) => void) | null; timeoutMinutes?: number; capDuty?: boolean; cgroupPeriodUs?: number | null }
 export declare function launchConstrained(command: string, args?: string[], options?: ConstrainOptions): ConstrainedRun;
 export declare function runConstrainedCommand(command: string, args?: string[], options?: ConstrainOptions): Promise<ConstrainedSummary>;
 export declare function constrainPage(page: import("playwright").Page, settings?: ConstrainedSettings | null, options?: CdpOptions): Promise<CdpConstraintResult | null>;
