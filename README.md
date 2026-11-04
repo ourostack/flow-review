@@ -165,6 +165,20 @@ npx flow-review run --engine chromium,webkit,msedge
 - **An engine that can't launch** (Edge not installed, say) fails each of its cells with the reason; the other engines' cells still run.
 - **Wheel input.** `{ scroll: { wheel: 120, times: 10, intervalMs: 50, target } }` turns the mouse wheel over the target (or the middle of the view) as a person does, on every engine, so a page's own wheel listeners run and the `jank` check judges the frames while it scrolls.
 
+### Known-failing cells
+
+Turning on an engine shows what already fails there. Those are bugs, not cells to skip: list each in `flows/flow-review-known-failing.json` (or `--known-failing <file>`, the action's `known-failing`), with its issue and owner, in the shape the basics gate and window tests share:
+
+```json
+{ "about": "Cells that fail on an engine today. The list only shrinks.",
+  "entries": [{ "case": "flows/app/scroll.flow.ts", "legs": ["webkit"], "issue": "#1823", "owner": "Chat scrolling (lane)", "why": "dead input scrolling a long channel" }] }
+```
+
+- `case` is a flow file (every cell of that flow) or `<file>:<cell name>` (`flows/app/scroll.flow.ts:390x844-light-rm`), split at the first `.flow.<ext>:`; `legs` are engines. `enforce` (default true) false makes what comes off advisory.
+- A listed cell's failing findings carry `known` (the issue) and `knownCase`, and never fail the run. Every other failure still does.
+- An unsharded run, and a merge, judge each listed case on each leg: one whose cells no longer fail, or that no longer runs, is a failing `known` finding, so its entry comes off in the pull request that fixes it. (A cell a cancelled shard left missing is a coverage finding instead.) Put `known` in `--fail-on` to fail on it. `report.json`'s `knownFailing` and the summary say which still fail and which come off.
+- `flow-review known-failing --check <file> --base <base branch's file>` fails when the list grew: it only shrinks. Nothing is skipped and no limit loosened.
+
 Every check runs on every engine and means the same there. Where WebKit lacks what Chromium measures with, flow-review measures another way, never more loosely, and says so: the `method` on the finding, and `engines.webkit.gaps` in the report.
 
 | Check | WebKit lacks | flow-review on WebKit |
