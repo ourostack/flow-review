@@ -23,9 +23,9 @@ parentPort.postMessage(out);
 
 const lib = mode === 'before' ? pathToFileURL(path.resolve(arg)).href : '../../lib/constrain.mjs';
 const { launchConstrained } = await import(lib);
-const configs = process.platform === 'darwin' ? [{ cpuMechanism: 'auto' }] : [{ cpuMechanism: 'auto' }, { cpuMechanism: process.platform === 'win32' ? 'hard-cap' : 'duty-cycle' }];
+const configs = process.platform === 'darwin' ? [{ cpuMechanism: 'auto', periodMs: 10 }, { cpuMechanism: 'auto', periodMs: 20 }, { cpuMechanism: 'auto', periodMs: 30 }] : [{ cpuMechanism: 'auto' }, { cpuMechanism: process.platform === 'win32' ? 'hard-cap' : 'duty-cycle' }];
 for (const c of configs) {
-  for (let k = 0; k < (process.platform === 'darwin' ? 6 : 3); k++) {
+  for (let k = 0; k < (process.platform === 'darwin' ? 5 : 3); k++) {
     const s = await launchConstrained(process.execPath, ['-e', '0'], { ...c, overrides: off, log: null, burstSamples: true }).done;
     const u = s.cpu;
     const d = u.duty?.cycles ? { onMs: +(u.duty.ranMs / u.duty.cycles).toFixed(2), offMs: +(u.duty.pausedMs / u.duty.cycles).toFixed(2), timer: u.duty.timer } : null;
