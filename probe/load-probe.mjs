@@ -29,7 +29,7 @@ function intermittent(n, onMs, offMs) {
 
 async function calibrate(version) {
   const { launchConstrained } = await import(new URL(versions[version], import.meta.url));
-  const s = await launchConstrained(process.execPath, ['-e', '0'], { cpuMechanism: 'duty-cycle', tolerance: 0.99, burstTolerance: 0.99, overrides: { memoryMB: 0, disk: { latencyMs: 0, mbPerSec: 0 }, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null }).done;
+  const s = await launchConstrained(process.execPath, ['-e', '0'], { cpuMechanism: process.env.PROBE_MECH ?? 'duty-cycle', tolerance: 0.99, burstTolerance: 0.99, overrides: { memoryMB: 0, disk: { latencyMs: 0, mbPerSec: 0 }, network: { latencyMs: 0, downKbps: 0, upKbps: 0 } }, log: null }).done;
   return s.cpu;
 }
 
