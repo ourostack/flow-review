@@ -1,3 +1,9 @@
+<!-- ourostack:brand:start -->
+<p align="center">
+  <a href="https://github.com/ourostack"><img src="https://raw.githubusercontent.com/ourostack/.github/main/brand/headers/flow-review.webp" alt="Ouro in spectacles inspecting a row of framed paintings of the same path at different sizes, one by night, while a robot walks the path with a clipboard" width="100%"></a>
+</p>
+<!-- ourostack:brand:end -->
+
 # flow-review
 
 Deterministic review of user and agent flows. A repository declares its flows in `flows/`; flow-review runs each one across a matrix of browser engines, viewports, themes and reduced motion, measures it with fixed checks, and writes JSON with a small cropped picture for every failure. Agents judge only what measurement can't decide, from packets the run prepares.
