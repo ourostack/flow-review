@@ -6,6 +6,8 @@
 
 # flow-review
 
+[Run it](#run-it) · [A flow](#a-flow) · [In CI](#in-ci) · [Releases](https://github.com/ourostack/flow-review/releases) · [More from Ouro](https://github.com/ourostack)
+
 Deterministic review of user and agent flows. A repository declares its flows in `flows/`; flow-review runs each one across a matrix of browser engines, viewports, themes and reduced motion, measures it with fixed checks, and writes JSON with a small cropped picture for every failure. Agents judge only what measurement can't decide, from packets the run prepares.
 
 It runs locally and in CI, and every check is also a plain function another repository can use as its own conformance test.
