@@ -12,9 +12,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels its older run. Runs not triggered by a pull request each
+# get their own group, so they are never cancelled.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Every test on each engine: the checks' fixture pages, the CLI's runs and the flows open in Chromium, then in WebKit
