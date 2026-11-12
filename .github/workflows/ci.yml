@@ -71,8 +71,9 @@ jobs:
   # fails there too, and the measurements WebKit takes another way agree with Chromium's.
   webkit-mac:
     runs-on: macos-latest
-    # Pull requests share one macOS lane with each other: the Ouro Labs enterprise's 50 macOS slots are shared by every
-    # org in it (ourostack/gatefold#286). The lane queues (never cancels); main and dispatch runs get their own group.
+    # This repository's pull requests take turns in one macOS lane: the Ouro Labs enterprise's 50 macOS slots are shared
+    # by every org in it (ourostack/gatefold#286). The lane queues and never cancels a running job (GitHub drops only the
+    # newest, past 100 waiting); main and dispatch runs get their own group.
     concurrency:
       group: >-
         ${{ github.event_name == 'pull_request' && 'flow-review-macos-pr-lane-webkit-mac'

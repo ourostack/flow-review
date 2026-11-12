@@ -1,6 +1,7 @@
 // Pull-request macOS jobs wait in a shared lane: the Ouro Labs enterprise's 50 macOS slots are shared by every org in it
-// (ourostack/gatefold#286). A lane is a job-level concurrency group with `queue: max`; it never cancels a job, and
-// runs other than pull requests get a group of their own.
+// (ourostack/gatefold#286). A lane is a job-level concurrency group with `queue: max`: it orders this repository's pull
+// requests and never cancels a running or older job (GitHub drops only the newest, past 100 waiting). Runs other than
+// pull requests, and the matrix's other legs, get a group of their own.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -33,15 +34,22 @@ test('the workflows have macOS jobs to check', () => {
   assert.ok(all.filter(onMac).length >= 2, 'expected webkit-mac and constrain');
 });
 
+const seen = new Map();
 for (const j of all.filter(onMac)) {
   test(`${j.file}: ${j.name} waits in a pull-request macOS lane`, () => {
     const conc = j.block.match(/^ {4}concurrency:\n((?: {6}.*\n| *\n)*)/m);
     assert.ok(conc, 'a macOS job needs a lane (a job-level concurrency group)');
-    const body = conc[1];
+    const body = conc[1].split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
     assert.match(body, /^ +queue: max\s*$/m, 'a lane queues with `queue: max`');
     assert.doesNotMatch(body, /cancel-in-progress/, 'a lane never cancels a job');
-    assert.match(body, /github\.event_name == 'pull_request'/, 'only pull requests share the lane');
-    assert.match(body, /'flow-review-macos-pr-lane-[a-z-]+'/, 'the lane is named flow-review-macos-pr-lane-<job>');
-    assert.match(body, /github\.run_id/, 'other runs get a group of their own');
+    const matrix = /^ {4}runs-on:.*matrix\./m.test(j.block);
+    const pr = matrix ? /github\.event_name == 'pull_request' && matrix\.os == 'macos-[a-z0-9]+' && '/ : /github\.event_name == 'pull_request' && '/;
+    assert.match(body, pr, matrix ? 'only the macOS leg of a pull request shares the lane' : 'only pull requests share the lane');
+    const lane = body.match(/'(flow-review-macos-pr-lane-[a-z-]+)'/);
+    assert.ok(lane, 'the lane is named flow-review-macos-pr-lane-<job>');
+    assert.ok(!seen.has(lane[1]), `${lane[1]} is also ${seen.get(lane[1])}'s lane`);
+    seen.set(lane[1], j.name);
+    const own = matrix ? /\|\| format\('[^']*', github\.run_id, github\.run_attempt, strategy\.job-index\)/ : /\|\| format\('[^']*', github\.run_id, github\.run_attempt\)/;
+    assert.match(body, own, 'every other run (and leg) gets a group of its own');
   });
 }
