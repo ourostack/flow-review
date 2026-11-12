@@ -71,6 +71,13 @@ jobs:
   # fails there too, and the measurements WebKit takes another way agree with Chromium's.
   webkit-mac:
     runs-on: macos-latest
+    # Pull requests share one macOS lane with each other: the Ouro Labs enterprise's 50 macOS slots are shared by every
+    # org in it (ourostack/gatefold#286). The lane queues (never cancels); main and dispatch runs get their own group.
+    concurrency:
+      group: >-
+        ${{ github.event_name == 'pull_request' && 'flow-review-macos-pr-lane-webkit-mac'
+        || format('flow-review-webkit-mac-{0}-{1}', github.run_id, github.run_attempt) }}
+      queue: max
     timeout-minutes: 15
     # The runner's headless Chromium has no GPU and drops frames of its own: Linux holds Chromium's smooth baseline, and
     # this job holds the WebKit side of the wheel tests (and both sides of the measurements that don't hang on frames).
@@ -92,6 +99,12 @@ jobs:
   # as much, the memory cap enforced (Windows, Linux) or detected (macOS), the proxy's latency, and pages throttled.
   constrain:
     runs-on: ${{ matrix.os }}
+    # The macOS leg waits in a pull-request lane, like webkit-mac above; the other legs and non-PR runs get their own group.
+    concurrency:
+      group: >-
+        ${{ github.event_name == 'pull_request' && matrix.os == 'macos-latest' && 'flow-review-macos-pr-lane-constrain'
+        || format('flow-review-constrain-{0}-{1}-{2}', github.run_id, github.run_attempt, strategy.job-index) }}
+      queue: max
     timeout-minutes: 15
     strategy:
       fail-fast: false
