@@ -389,6 +389,29 @@ test('duoBytes: the duo assets a page fetched, against the budget', async () => 
   assert.match(big.fix, /rider\.webp/);
 });
 
+test('states: a control\'s own spinner is not a loading state; a busy region still is', async () => {
+  const { ensure } = await import('../lib/checks.mjs');
+  const page = await pageWith(`<main><section id="chat"><button aria-busy="true">Sending</button><a href="#j" aria-busy="true">Joining</a>
+    <div role="menu"><div role="menuitem" aria-busy="true">Adding</div></div><span role="switch" aria-busy="true">On</span>
+    <button><span aria-busy="true">Approving</span></button></section>
+    <section id="plan" aria-busy="true"><p>Fetching the plan</p></section></main>`);
+  await ensure(page);
+  const states = await page.evaluate(() => window.__fr.states());
+  assert.deepEqual(states.filter((s) => s.kind === 'loading').map((s) => s.selector), ['#plan'], JSON.stringify(states));
+  await page.context().close();
+});
+
+test('states: a declared state whose region is not on screen is not attributed to main; with no region it is', async () => {
+  const { ensure } = await import('../lib/checks.mjs');
+  const page = await pageWith('<main><p>Words.</p><section id="list"><ul><li>One</li></ul></section></main>');
+  await ensure(page);
+  const unmet = await page.evaluate(() => window.__fr.states({ declared: [{ kind: 'loading', regionRef: null }, { kind: 'empty', region: '#gone' }] }));
+  assert.ok(!unmet.some((s) => s.kind === 'loading' || s.kind === 'empty'), `a declared state with a missing region is not reported on main: ${JSON.stringify(unmet)}`);
+  const none = await page.evaluate(() => window.__fr.states({ declared: [{ kind: 'empty' }] }));
+  assert.deepEqual(none.filter((s) => s.kind === 'empty').map((s) => [s.selector.endsWith('main'), s.how]), [[true, 'declared']], 'a declared state with no region falls back to main');
+  await page.context().close();
+});
+
 test('states: an empty list in an overlay layer is not an empty state; framework ids are not anchors', async () => {
   const { ensure } = await import('../lib/checks.mjs');
   const page = await pageWith('<main><p>Words.</p><div style="position:fixed;bottom:0"><ol role="list" aria-label="Notifications"></ol></div><div id="«r1»"><p role="status" data-state="success">Saved.</p></div><p id="decl" role="status">The plan isn\'t available right now.</p></main>');

@@ -246,10 +246,10 @@ The duo's markers are `checks.duo: { art: "[data-duo]", quiet: "[data-duo-quiet]
 
 At every capture, after every `act` and at each declared `state`, the run notes every empty, loading, error, first-run and success state on screen:
 
-- `data-state`, `aria-busy`, progress bars and alerts;
+- `data-state`, `aria-busy` on a region or container (a control's own spinner, on a button, link, field, menu item or tab, is its feedback, not a loading state), progress bars and alerts;
 - status lines whose words say so (loading, error, empty: never success, since a line saying "Updated" or "Saved" is often standing information);
 - lists, tables and grids with nothing in them;
-- declared `state`s, which name their element's kind outright.
+- declared `state`s, which name their element's kind outright. A declared region that isn't on screen is not listed (the `states` check reports it as `not shown`), and no other element stands in for it.
 
 Each one also records whether it holds its Moment: `[data-moment="<kind>"]`, or `checks.moments.marker`.
 
