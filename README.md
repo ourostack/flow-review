@@ -17,7 +17,7 @@ It runs locally and in CI, and every check is also a plain function another repo
 Node 22.18 or newer. From the product repository:
 
 ```sh
-npm install --save-dev github:ourostack/flow-review#v0.6.0 && npx playwright install --only-shell chromium
+npm install --save-dev github:ourostack/flow-review#v0.6.2 && npx playwright install --only-shell chromium
 npx flow-review run                  # flows/**/*.flow.{ts,json}
 npx flow-review run 'flows/site/*.flow.ts' --only axe,contrast --fail-on none
 ```
@@ -93,7 +93,7 @@ The flow file needs nothing installed: flow-review resolves `@ourostack/flow-rev
 - **Matrix:** each engine × viewport × theme × reduced-motion combination is a cell (engines come from the run's `--engine`, less any the flow's `matrix.engines` leaves out: [Engines](#engines)). Themes come from `prefers-color-scheme`, or from the flow's own `themeSteps` (`matrix.themeVia: "steps"`), for an app with its own toggle.
 - **Fixtures:** `fixtures.route` answers matching requests from a file, `json`, `body` or `status`, for the whole flow. A step's `route` adds to them: a `goto`'s until the next `goto` or the end of the flow, any other step's for that step only (a step inside a hold or the theme steps adds its own on top of the outer step's). The most specific scope answers first: the step's routes, then the `goto`'s, then the flow's, and within each the first pattern that matches. A step's route that no request matched before then is an `unusedRoute` finding, which is advisory: it never fails the run. Requests to other origins are aborted (`app.blockExternal: false` allows them), so runs don't depend on the network.
 - **After a goto:** `app.readyAfterGoto` says what a `goto` waits for once the page has navigated: `"load"` (the default), `"domcontentloaded"`, `"networkidle"`, or a target such as `{ "selector": "#plan", "ms": 10000 }` (a `role` with its `name`, `text` or `selector`, and `ms`, default 15000; a longer `ms` lengthens the goto's step and cell limits to match). `networkidle` is opt-in. It waits up to 3 s and never comes while the page holds a stream open (live updates read through `fetch`, for example), so it would cost those 3 s on every goto. Whatever the choice, every goto, `waitFor`, act and capture then waits for fonts, the images on screen and running animations, plus two frames, so no layout shift is pending. A page that fills in after load (data it fetches) is caught by the flow's next `waitFor` or a declared `state`, or by a target here.
-- **Time limits:** `timeouts: { cellMs, stepMs }`. A cell (one matrix cell, or an agent flow's one unit) may take `cellMs` (default 120000, or the flow's longest `waitFor.ms` or step `timeoutMs`, counting a hold's `ms` and the steps it holds the key for, and 30 s more when that is longer and no `cellMs` is set), counted once its app is up (`app.readyTimeoutMs` bounds the start). Past it, the engine stops the cell: it closes its page (a `cdp` browser is only disconnected), kills its running command, and stops its app when the app is the flow's own (`scope: "flow"`) or no longer answers its ready URL, so the next cell starts it afresh. A `timeout` finding names the step it was on, that step's target and the time, and the run goes on with the next cell, so a shard always finishes and writes its report. A step may take `stepMs` (default 60000): a `goto`, `act` or `waitFor` that hangs fails that step, naming its target in `selector`. A `waitFor` with a longer `ms` gets that `ms` and 5 s more (a hold's `ms` likewise, for pressing the key; each step it holds the key for has its own limit), and an agent step's own `timeoutMs` wins. A flow's `timeouts` go over its config's.
+- **Time limits:** `timeouts: { cellMs, stepMs }`. A cell (one matrix cell, or an agent flow's one unit) may take `cellMs` (default 120000, or the flow's longest `waitFor.ms` or step `timeoutMs`, counting a hold's `ms` and the steps it holds the key for, and 30 s more when that is longer and no `cellMs` is set), counted once its app is up (`app.readyTimeoutMs` bounds the start). Past it, the engine stops the cell: it closes its page (a `cdp` browser is only disconnected), kills its running command, and stops its app when the app is the flow's own (`scope: "flow"`) or no longer answers its ready URL, so the next cell starts it afresh. A `timeout` finding names the step it was on, that step's target and the time, and the run goes on with the next cell, so a shard always finishes and writes its report. The log gets a line as each cell starts (`  <flow>#<cell>: starting`, before its app starts) and as it finishes (`  <flow>#<cell>: N s, N failing`), so if a job is cancelled while a cell hangs before its `cellMs` starts counting, its log ends on that cell. A step may take `stepMs` (default 60000): a `goto`, `act` or `waitFor` that hangs fails that step, naming its target in `selector`. A `waitFor` with a longer `ms` gets that `ms` and 5 s more (a hold's `ms` likewise, for pressing the key; each step it holds the key for has its own limit), and an agent step's own `timeoutMs` wins. A flow's `timeouts` go over its config's.
 - **What fails it:** `failOn` (`any`, `none` or a comma list of checks) takes the place of `--fail-on` for this flow. A flow failing on `none` is advisory ([Coverage](#coverage-cancelled-shards-and-advisory-flows)).
 
 ## Placeholders and the config file
@@ -280,7 +280,7 @@ jobs:
     strategy: { fail-fast: false, matrix: { shard: [1/4, 2/4, 3/4, 4/4] } }
     steps:
       - uses: actions/checkout@v4
-      - uses: ourostack/flow-review@v0.6.0
+      - uses: ourostack/flow-review@v0.6.2
         with: { flows: "flows/site/*.flow.ts", shard: "${{ matrix.shard }}", engine: "chromium,webkit", fail-on: none }
   merge:
     needs: review
@@ -289,7 +289,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "flow-review-*-of-*", path: shards }
-      - uses: ourostack/flow-review@v0.6.0
+      - uses: ourostack/flow-review@v0.6.2
         with: { command: merge, reports: "shards/*", flows: "flows/site/*.flow.ts", engine: "chromium,webkit", fail-on: none }
 ```
 
