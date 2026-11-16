@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SELF = path.join('test', 'no-load-generators.test.mjs');
+const VENDORED = path.join('lib', 'ouro-ui');
 
 const GENERATOR = '(?:yes|stress|stress-ng)(?:\\.exe)?';
 const RULES = {
@@ -44,7 +45,8 @@ function files() {
   };
   for (const dir of ['lib', 'bin', 'test', path.join('.github', 'workflows')]) if (fs.existsSync(path.join(root, dir))) walk(dir);
   for (const f of ['action.yml', 'action.yaml']) if (fs.existsSync(path.join(root, f))) out.push(f);
-  return out.filter((f) => f !== SELF);
+  // The vendored Ouro AX kit is the release's files, byte for byte (upstream-sources.lock.json); its own loops are Ouro's.
+  return out.filter((f) => f !== SELF && !f.startsWith(`${VENDORED}${path.sep}`));
 }
 
 // A line's code without its comment: whole comment lines, and a trailing `// ` comment (a URL's // has no space before).
