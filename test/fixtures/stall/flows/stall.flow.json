@@ -1,0 +1,10 @@
+{
+  "schema": "flow-review/0",
+  "name": "Stall fixture: an app that never starts",
+  "surface": "agent-cli",
+  "app": { "start": "node test/fixtures/stall/never-ready.mjs", "ready": "stdout-json", "readyTimeoutMs": 600000 },
+  "timeouts": { "cellMs": 3000 },
+  "steps": [
+    { "id": "never", "run": ["node", "-e", "console.log('ok')"], "expect": { "exit": 0 } }
+  ]
+}

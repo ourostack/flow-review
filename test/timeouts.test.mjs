@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validate } from '../lib/schema.mjs';
 
@@ -195,4 +195,33 @@ test('merge gates coverage per flow: missing advisory cells are findings, missin
     assert.equal(cli('merge', dir('cancelled'), '--out', dir('plain-axe'), '--flows', flows, '--fail-on', 'axe').status, 3);
   });
   fs.rmSync(path.join(scratch, 'cov'), { recursive: true, force: true });
+});
+
+test('a cell logs its start before its app starts, so a job killed while the app hangs names the cell', { timeout: 60_000 }, async () => {
+  fs.rmSync(path.join(scratch, 'stall'), { recursive: true, force: true });
+  fs.mkdirSync(path.join(scratch, 'stall'), { recursive: true });
+  const pidFile = path.join(scratch, 'stall', 'app.pid');
+  // The app never announces itself, and readyTimeoutMs is 10 minutes: only the job's own limit would stop this cell.
+  const child = spawn(process.execPath, ['bin/flow-review.mjs', 'run', 'test/fixtures/stall/flows/*.flow.json', '--out', path.join(scratch, 'stall', 'out')], { cwd: root, env: { ...process.env, FLOW_REVIEW_WORKERS: '1', FLOW_REVIEW_STALL_PID: pidFile } });
+  let stderr = '';
+  child.stderr.on('data', (d) => { stderr += d; });
+  let exited = false;
+  const closed = new Promise((r) => child.on('close', () => { exited = true; r(); }));
+  try {
+    const t0 = performance.now();
+    while (!fs.existsSync(pidFile) || !fs.readFileSync(pidFile, 'utf8')) {
+      assert.ok(!exited && performance.now() - t0 < 30_000, `the app never started:\n${stderr}`);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    // As a cancelled job's runner does: no signal handler, no chance to flush anything more.
+    child.kill('SIGKILL');
+    await closed;
+    assert.match(stderr, /^ {2}test\/fixtures\/stall\/flows\/stall\.flow\.json#.+: starting$/m, `the log names the cell that hung:\n${stderr}`);
+    assert.doesNotMatch(stderr, /stall\.flow\.json#.+: \d+\.\d s/, 'the cell never finished');
+  } finally {
+    child.kill('SIGKILL');
+    const pid = Number(fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8'));
+    if (pid) try { process.kill(pid, 'SIGKILL'); } catch {}
+    fs.rmSync(path.join(scratch, 'stall'), { recursive: true, force: true });
+  }
 });
