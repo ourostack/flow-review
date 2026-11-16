@@ -1,0 +1,263 @@
+{
+  "generator": "ouro-actions 0.16.0",
+  "set": "flow-review",
+  "tools": [
+    {
+      "name": "run_flows",
+      "description": "Run the declared flows across the matrix and write report/report.json with its findings, evidence and summary. Exit 1 when a check named by failOn fails.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Where the report is written (default report)."
+          },
+          "shard": {
+            "type": "string",
+            "description": "k/n: run one shard of the units."
+          },
+          "failOn": {
+            "type": "string",
+            "description": "any, none, or a comma list of checks that fail the run (default any)."
+          },
+          "only": {
+            "type": "string",
+            "description": "A comma list of checks to run (default all)."
+          },
+          "times": {
+            "type": "string",
+            "description": "The per-unit times that balance the shards."
+          },
+          "workers": {
+            "type": "string",
+            "description": "Matrix cells run side by side in one browser."
+          },
+          "cells": {
+            "type": "string",
+            "description": "A comma list of cell key texts to keep, for a quick local run."
+          },
+          "engine": {
+            "type": "string",
+            "description": "Browser engines every web flow runs on: chromium, webkit, msedge."
+          },
+          "target": {
+            "type": "string",
+            "description": "What the flows run against, recorded in report.json's provenance."
+          },
+          "targetVersion": {
+            "type": "string",
+            "description": "The target's version, recorded in provenance."
+          },
+          "slack": {
+            "type": "number",
+            "description": "Scales every maxMs budget (default 1).",
+            "minimum": 0
+          },
+          "config": {
+            "type": "string",
+            "description": "The flow-review.config.json to use."
+          },
+          "headed": {
+            "type": "boolean",
+            "description": "Show the browser; refused outside CI."
+          },
+          "evidenceMax": {
+            "type": "string",
+            "description": "The most evidence to keep: bytes, KB, MB or none."
+          },
+          "constrained": {
+            "type": "string",
+            "description": "Slow every page through DevTools, or off."
+          },
+          "knownFailing": {
+            "type": "string",
+            "description": "The list of cells that fail today, each with its issue."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "list_units",
+      "description": "Print every unit the flows expand to and how shards split them. Runs nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "shard": {
+            "type": "string",
+            "description": "k/n, to count one shard."
+          },
+          "times": {
+            "type": "string",
+            "description": "The per-unit times that balance the shards."
+          },
+          "engine": {
+            "type": "string",
+            "description": "Browser engines to list."
+          },
+          "config": {
+            "type": "string",
+            "description": "The flow-review.config.json to use."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "merge_reports",
+      "description": "Combine shard report folders into one report.json, checking that each expected unit ran exactly once. Exit 3 when a failing unit is missing or ran twice.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Where the merged report is written (default report)."
+          },
+          "flows": {
+            "type": "string",
+            "description": "A glob of the flows whose units are expected."
+          },
+          "engine": {
+            "type": "string",
+            "description": "The engines the merge expects."
+          },
+          "failOn": {
+            "type": "string",
+            "description": "any, none, or a comma list of checks."
+          },
+          "coverage": {
+            "type": "string",
+            "description": "gated (default) or strict."
+          },
+          "config": {
+            "type": "string",
+            "description": "The flow-review.config.json to use."
+          },
+          "knownFailing": {
+            "type": "string",
+            "description": "The list of cells that fail today."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "record_times",
+      "description": "Write each unit's measured time from the report folders to the times file, which the next run uses to balance shards.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Where the times are written (default flows/flow-review-times.json)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "print_summary",
+      "description": "Print the markdown summary of report/report.json.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "judge_merge",
+      "description": "Validate the judges' rubric answer files and fold them into report.json. Exit 2 when one is invalid.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "merge": {
+            "type": "boolean",
+            "description": "Fold the rubric answer files named after it into the report."
+          },
+          "report": {
+            "type": "string",
+            "description": "The report folder to update (default report)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "check_known_failing",
+      "description": "Check a known-failing list is valid. With base, exit 1 when it grew against the base list: the list only shrinks.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "type": "string",
+            "description": "The known-failing list to check."
+          },
+          "base": {
+            "type": "string",
+            "description": "The base branch's list to compare against."
+          },
+          "count": {
+            "type": "boolean",
+            "description": "Print how many entries the list has."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "consequentialHint": false
+      }
+    },
+    {
+      "name": "validate_flows",
+      "description": "Load and validate the flows named by the globs, printing one ok line per flow. Runs nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "type": "string",
+            "description": "The flow-review.config.json to use."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "consequentialHint": false
+      }
+    }
+  ],
+  "refusals": {}
+}

@@ -1,0 +1,349 @@
+{
+  "generator": "ouro-actions 0.16.0",
+  "set": "flow-review",
+  "tool": "flow-review",
+  "actions": [
+    {
+      "id": "run_flows",
+      "cli": "run",
+      "consent": "write",
+      "label": "Run flows",
+      "description": "Run the product's flows across its matrix and write the report.",
+      "agent": "Run the declared flows across the matrix and write report/report.json with its findings, evidence and summary. Exit 1 when a check named by failOn fails.",
+      "input": {
+        "out": {
+          "label": "Output folder",
+          "description": "Where the report is written (default report).",
+          "optional": true,
+          "kind": "string"
+        },
+        "shard": {
+          "label": "Shard",
+          "description": "k/n: run one shard of the units.",
+          "optional": true,
+          "kind": "string"
+        },
+        "failOn": {
+          "label": "Fail on",
+          "description": "any, none, or a comma list of checks that fail the run (default any).",
+          "optional": true,
+          "kind": "string"
+        },
+        "only": {
+          "label": "Only",
+          "description": "A comma list of checks to run (default all).",
+          "optional": true,
+          "kind": "string"
+        },
+        "times": {
+          "label": "Times file",
+          "description": "The per-unit times that balance the shards.",
+          "optional": true,
+          "kind": "string"
+        },
+        "workers": {
+          "label": "Workers",
+          "description": "Matrix cells run side by side in one browser.",
+          "optional": true,
+          "kind": "string"
+        },
+        "cells": {
+          "label": "Cells",
+          "description": "A comma list of cell key texts to keep, for a quick local run.",
+          "optional": true,
+          "kind": "string"
+        },
+        "engine": {
+          "label": "Engine",
+          "description": "Browser engines every web flow runs on: chromium, webkit, msedge.",
+          "optional": true,
+          "kind": "string"
+        },
+        "target": {
+          "label": "Target",
+          "description": "What the flows run against, recorded in report.json's provenance.",
+          "optional": true,
+          "kind": "string"
+        },
+        "targetVersion": {
+          "label": "Target version",
+          "description": "The target's version, recorded in provenance.",
+          "optional": true,
+          "kind": "string"
+        },
+        "slack": {
+          "label": "Slack",
+          "description": "Scales every maxMs budget (default 1).",
+          "optional": true,
+          "min": 0,
+          "kind": "number"
+        },
+        "config": {
+          "label": "Config",
+          "description": "The flow-review.config.json to use.",
+          "optional": true,
+          "kind": "string"
+        },
+        "headed": {
+          "label": "Headed",
+          "description": "Show the browser; refused outside CI.",
+          "optional": true,
+          "kind": "boolean"
+        },
+        "evidenceMax": {
+          "label": "Evidence cap",
+          "description": "The most evidence to keep: bytes, KB, MB or none.",
+          "optional": true,
+          "kind": "string"
+        },
+        "constrained": {
+          "label": "Constrained profile",
+          "description": "Slow every page through DevTools, or off.",
+          "optional": true,
+          "kind": "string"
+        },
+        "knownFailing": {
+          "label": "Known failing list",
+          "description": "The list of cells that fail today, each with its issue.",
+          "optional": true,
+          "kind": "string"
+        }
+      },
+      "output": {
+        "report": {
+          "label": "Report folder",
+          "description": "The folder the run wrote its report.json to.",
+          "kind": "string"
+        }
+      }
+    },
+    {
+      "id": "list_units",
+      "cli": "list",
+      "consent": "read",
+      "label": "List units",
+      "description": "Print the units and how the shards split them, without running anything.",
+      "agent": "Print every unit the flows expand to and how shards split them. Runs nothing.",
+      "input": {
+        "shard": {
+          "label": "Shard",
+          "description": "k/n, to count one shard.",
+          "optional": true,
+          "kind": "string"
+        },
+        "times": {
+          "label": "Times file",
+          "description": "The per-unit times that balance the shards.",
+          "optional": true,
+          "kind": "string"
+        },
+        "engine": {
+          "label": "Engine",
+          "description": "Browser engines to list.",
+          "optional": true,
+          "kind": "string"
+        },
+        "config": {
+          "label": "Config",
+          "description": "The flow-review.config.json to use.",
+          "optional": true,
+          "kind": "string"
+        }
+      },
+      "output": {
+        "units": {
+          "label": "Units",
+          "description": "The listed shards and their units.",
+          "kind": "string"
+        }
+      }
+    },
+    {
+      "id": "merge_reports",
+      "cli": "merge",
+      "consent": "write",
+      "label": "Merge reports",
+      "description": "Combine shard reports into one report.",
+      "agent": "Combine shard report folders into one report.json, checking that each expected unit ran exactly once. Exit 3 when a failing unit is missing or ran twice.",
+      "input": {
+        "out": {
+          "label": "Output folder",
+          "description": "Where the merged report is written (default report).",
+          "optional": true,
+          "kind": "string"
+        },
+        "flows": {
+          "label": "Flows",
+          "description": "A glob of the flows whose units are expected.",
+          "optional": true,
+          "kind": "string"
+        },
+        "engine": {
+          "label": "Engine",
+          "description": "The engines the merge expects.",
+          "optional": true,
+          "kind": "string"
+        },
+        "failOn": {
+          "label": "Fail on",
+          "description": "any, none, or a comma list of checks.",
+          "optional": true,
+          "kind": "string"
+        },
+        "coverage": {
+          "label": "Coverage",
+          "description": "gated (default) or strict.",
+          "optional": true,
+          "kind": "string"
+        },
+        "config": {
+          "label": "Config",
+          "description": "The flow-review.config.json to use.",
+          "optional": true,
+          "kind": "string"
+        },
+        "knownFailing": {
+          "label": "Known failing list",
+          "description": "The list of cells that fail today.",
+          "optional": true,
+          "kind": "string"
+        }
+      },
+      "output": {
+        "report": {
+          "label": "Report folder",
+          "description": "The folder the run wrote its report.json to.",
+          "kind": "string"
+        }
+      }
+    },
+    {
+      "id": "record_times",
+      "cli": "times",
+      "consent": "write",
+      "label": "Record times",
+      "description": "Record each unit's time from reports, to balance the next run's shards.",
+      "agent": "Write each unit's measured time from the report folders to the times file, which the next run uses to balance shards.",
+      "input": {
+        "out": {
+          "label": "Times file",
+          "description": "Where the times are written (default flows/flow-review-times.json).",
+          "optional": true,
+          "kind": "string"
+        }
+      },
+      "output": {
+        "file": {
+          "label": "Times file",
+          "description": "The file written.",
+          "kind": "string"
+        }
+      }
+    },
+    {
+      "id": "print_summary",
+      "cli": "summary",
+      "consent": "read",
+      "label": "Print summary",
+      "description": "Print the markdown summary of a report.",
+      "agent": "Print the markdown summary of report/report.json.",
+      "input": {},
+      "output": {
+        "summary": {
+          "label": "Summary",
+          "description": "The markdown summary.",
+          "kind": "string"
+        }
+      }
+    },
+    {
+      "id": "judge_merge",
+      "cli": "judge",
+      "consent": "write",
+      "label": "Fold in judges",
+      "description": "Fold judges' rubric answers into the report.",
+      "agent": "Validate the judges' rubric answer files and fold them into report.json. Exit 2 when one is invalid.",
+      "input": {
+        "merge": {
+          "label": "Merge",
+          "description": "Fold the rubric answer files named after it into the report.",
+          "optional": true,
+          "kind": "boolean"
+        },
+        "report": {
+          "label": "Report folder",
+          "description": "The report folder to update (default report).",
+          "optional": true,
+          "kind": "string"
+        }
+      },
+      "output": {
+        "report": {
+          "label": "Report folder",
+          "description": "The folder the run wrote its report.json to.",
+          "kind": "string"
+        }
+      }
+    },
+    {
+      "id": "check_known_failing",
+      "cli": "known-failing",
+      "consent": "read",
+      "label": "Check known failing",
+      "description": "Check that a known-failing list is valid and has not grown.",
+      "agent": "Check a known-failing list is valid. With base, exit 1 when it grew against the base list: the list only shrinks.",
+      "input": {
+        "check": {
+          "label": "List",
+          "description": "The known-failing list to check.",
+          "optional": true,
+          "kind": "string"
+        },
+        "base": {
+          "label": "Base list",
+          "description": "The base branch's list to compare against.",
+          "optional": true,
+          "kind": "string"
+        },
+        "count": {
+          "label": "Count",
+          "description": "Print how many entries the list has.",
+          "optional": true,
+          "kind": "boolean"
+        }
+      },
+      "output": {
+        "entries": {
+          "label": "Entries",
+          "description": "How many entries the list has.",
+          "min": 0,
+          "kind": "integer"
+        }
+      }
+    },
+    {
+      "id": "validate_flows",
+      "cli": "validate",
+      "consent": "read",
+      "label": "Validate flows",
+      "description": "Load and validate flows without running them.",
+      "agent": "Load and validate the flows named by the globs, printing one ok line per flow. Runs nothing.",
+      "input": {
+        "config": {
+          "label": "Config",
+          "description": "The flow-review.config.json to use.",
+          "optional": true,
+          "kind": "string"
+        }
+      },
+      "output": {
+        "flows": {
+          "label": "Flows",
+          "description": "How many flows loaded.",
+          "min": 0,
+          "kind": "integer"
+        }
+      }
+    }
+  ]
+}
