@@ -10,6 +10,7 @@ Issues and pull requests are welcome.
 - The JSON Schemas in `schema/` are the contract: a change that breaks an existing flow or report needs a new schema version.
 - Pin third-party actions to a full commit, with the version in a comment.
 - The CLI's commands are declared once in `actions/flow-review.actions.mts` (the [one action model](https://github.com/ourostack/ouro-ui-core/blob/main/docs/guides/actions.md)). Change the declaration and run `node tools/ouro-actions/ouro-actions.mts generate actions/flow-review.actions.mts actions/generated`; never edit `actions/generated/`. `tools/ouro-actions/` is the core v0.16.0 generator, vendored and pinned in `upstream-sources.lock.json`.
+- The [Ouro AX X-ray](lib/ouro-ui/registry/ouro/ax/xray.ts) runs on the CLI in `.github/workflows/ax-xray.yml` with `--conformance`: every must claim has to hold. Run it locally with `node scripts/inventory.mjs > inventory.json` and `node lib/ouro-ui/registry/ouro/ax/xray.ts --cli "node bin/flow-review.mjs" --inventory inventory.json --conformance --home /tmp/xray-home --state "validate test/fixtures/flows/web.flow.ts" --md xray.md`.
 - Releases are tags (`v<major>.<minor>.<patch>`) on a green `main`, with the version in `package.json` to match.
 
 By contributing, you agree that your contributions are licensed under the [MIT licence](LICENSE).

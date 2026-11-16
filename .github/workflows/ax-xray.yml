@@ -1,0 +1,59 @@
+name: ax-xray
+
+# The Ouro AX X-ray on the CLI as it is, and the action declarations' check, on every pull request and on main. Both
+# write a report.json that the Ouro adoption ledger reads from the artifacts named `xray` (the X-ray) and
+# `actions-xray` (the action claims). The X-ray exits 1 unless the CLI conforms, so the job fails with it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  xray:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: The CLI's inventory, from its own registration
+        run: node scripts/inventory.mjs > inventory.json
+      - name: Ouro AX X-ray, conformance
+        run: |
+          mkdir -p xray
+          node lib/ouro-ui/registry/ouro/ax/xray.ts --cli "node bin/flow-review.mjs" --inventory inventory.json --conformance \
+            --home "$RUNNER_TEMP/xray-home" --state "validate test/fixtures/flows/web.flow.ts" \
+            --commit "$GITHUB_SHA" --json --md xray/xray.md > xray/report.json
+      - name: Action claims (the declarations and their generated files)
+        run: |
+          mkdir -p xray-actions
+          node tools/ouro-actions/ouro-actions.mts check actions/flow-review.actions.mts actions/generated \
+            --report xray-actions/report.json --app "flow-review" --commit "$GITHUB_SHA"
+      - name: Upload the X-ray report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: xray
+          path: xray/
+          if-no-files-found: error
+      - name: Upload the action claims report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: actions-xray
+          path: xray-actions/
+          if-no-files-found: error
