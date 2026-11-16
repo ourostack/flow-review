@@ -26,3 +26,12 @@ test('each declared command is registered by the CLI, and rejects a flag it does
     assert.ok(!/unknown command/.test(out.stderr), `${def.name} is not registered`);
   }
 });
+
+test('help --json lists every declared command, its effect, and the exit codes the CLI gives', () => {
+  const out = spawnSync(process.execPath, ['bin/flow-review.mjs', 'help', '--json'], { cwd: root, encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
+  const help = JSON.parse(out.stdout);
+  assert.deepEqual(help.commands.map((c) => c.name), declared.map((c) => c.name));
+  assert.ok(help.commands.every((c) => c.effect === 'private'));
+  assert.deepEqual(help.exitCodes.map((e) => e.code), [0, 1, 2, 3]);
+});
