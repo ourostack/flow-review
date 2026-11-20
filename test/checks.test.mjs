@@ -159,12 +159,18 @@ test('states: human words, not a raw error', async () => {
 });
 
 test('cls', async () => {
-  const late = '<main><p id="t">Top</p><p>Below</p><script>setTimeout(() => { const d = document.createElement("div"); d.style.height = "300px"; d.textContent = "late"; document.querySelector("main").prepend(d); }, 200)</script></main>';
+  const late = '<main><p id="t">Top</p><p>Below</p></main>';
   const good = await pageWith('<main><p>Still</p><p>Below</p></main>');
   await good.waitForTimeout(400);
   assert.equal(failing(await checks.cls(good)).length, 0);
   await good.context().close();
   const bad = await pageWith(late);
+  // Shift after the sampler has read its first frames, however slow the runner is.
+  await bad.waitForTimeout(500);
+  await bad.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const d = document.createElement('div'); d.style.height = '300px'; d.textContent = 'late'; document.querySelector('main').prepend(d);
+    res();
+  }))));
   await bad.waitForTimeout(600);
   const all = await checks.cls(bad);
   const [f] = failing(all);
