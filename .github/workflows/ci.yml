@@ -233,3 +233,15 @@ jobs:
           test "$EXIT_CODE" = 0
           grep -q '"check":"coverage"' report/findings.jsonl
           node -e 'const c = require("./report/report.json").coverage; const f = require("fs").readFileSync("report/findings.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((x) => x.check === "coverage"); if (!c.advisory.length || c.failing.length || c.missingReports.length !== 1 || f.length !== c.advisory.length || f.some((x) => x.pass)) process.exit(1)'
+
+  # The one check a bot or person's pull request waits on: green only when every job above passed.
+  ci-ok:
+    if: always()
+    needs: [test, webkit-mac, constrain, action, action-msedge, merge, merge-cancelled-shard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do test "$r" = success || { echo "a job ended $r"; exit 1; }; done
