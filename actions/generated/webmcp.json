@@ -1,9 +1,10 @@
 {
-  "generator": "ouro-actions 0.16.0",
+  "generator": "ouro-actions 1.4.1",
   "set": "flow-review",
   "tools": [
     {
       "name": "run_flows",
+      "title": "Run flows",
       "description": "Run the declared flows across the matrix and write report/report.json with its findings, evidence and summary. Exit 1 when a check named by failOn fails.",
       "inputSchema": {
         "type": "object",
@@ -84,6 +85,7 @@
     },
     {
       "name": "list_units",
+      "title": "List units",
       "description": "Print every unit the flows expand to and how shards split them. Runs nothing.",
       "inputSchema": {
         "type": "object",
@@ -115,6 +117,7 @@
     },
     {
       "name": "merge_reports",
+      "title": "Merge reports",
       "description": "Combine shard report folders into one report.json, checking that each expected unit ran exactly once. Exit 3 when a failing unit is missing or ran twice.",
       "inputSchema": {
         "type": "object",
@@ -158,6 +161,7 @@
     },
     {
       "name": "record_times",
+      "title": "Record times",
       "description": "Write each unit's measured time from the report folders to the times file, which the next run uses to balance shards.",
       "inputSchema": {
         "type": "object",
@@ -177,6 +181,7 @@
     },
     {
       "name": "print_summary",
+      "title": "Print summary",
       "description": "Print the markdown summary of report/report.json.",
       "inputSchema": {
         "type": "object",
@@ -191,6 +196,7 @@
     },
     {
       "name": "judge_merge",
+      "title": "Fold in judges",
       "description": "Validate the judges' rubric answer files and fold them into report.json. Exit 2 when one is invalid.",
       "inputSchema": {
         "type": "object",
@@ -214,6 +220,7 @@
     },
     {
       "name": "check_known_failing",
+      "title": "Check known failing",
       "description": "Check a known-failing list is valid. With base, exit 1 when it grew against the base list: the list only shrinks.",
       "inputSchema": {
         "type": "object",
@@ -241,6 +248,7 @@
     },
     {
       "name": "validate_flows",
+      "title": "Validate flows",
       "description": "Load and validate the flows named by the globs, printing one ok line per flow. Runs nothing.",
       "inputSchema": {
         "type": "object",
