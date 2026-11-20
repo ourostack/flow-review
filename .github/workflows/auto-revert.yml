@@ -1,0 +1,22 @@
+name: Auto-revert red main
+
+# Re-runs the failed jobs of a red main run once, then reverts the pull request that keeps main red after 60 minutes, with this
+# repository's own GITHUB_TOKEN (the central cron's PAT cannot write here). Rule and guards: ourostack/.github tools/red-main/README.md.
+on:
+  schedule:
+    - cron: "4-59/10 * * * *"
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: read
+
+jobs:
+  auto-revert:
+    uses: ourostack/.github/.github/workflows/auto-revert-reusable.yml@main
