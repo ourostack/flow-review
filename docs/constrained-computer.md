@@ -166,8 +166,11 @@ one, it corrects both.
   thread for about 165 µs of every 210 (measured about 4.4×); on Linux and macOS a thread signals the main thread
   every 200 µs to busy-wait three times as long as it ran, counting at most 1 ms of running. Linux wakes that thread on
   time (4.1–4.2×). macOS often wakes it 0.3–1.5 ms late, so the pauses after a run of over 1 ms are cut short and the
-  page gets more than its share; on GitHub's macOS runners the factor measured 3.5–4.1×, and dips lower for a moment
-  when the wake-ups are late for long.
+  page gets more than its share; on GitHub's macOS runners the factor measured 3.5–4.1×, and dips lower when the
+  wake-ups are late for long: 2.32× for a whole calibration in one run (#186). So with `calibrate`, a page that measures
+  more than 5% off the profile's factor gets DevTools' rate corrected and is measured again, as the tree's constraint is,
+  up to four times and to at most four times the profile's rate. `cpu.rate` stays the profile's factor, `cpu.appliedRate`
+  is the rate the page is left at, and `cpu.calibration` has each measurement.
 
 The factor is relative to this computer at the moment it runs: on a busy computer the baseline is slower too. On a
 heavily loaded computer, and on Apple silicon, where a process can move between performance and efficiency cores, the
