@@ -15,7 +15,7 @@ import { chromium } from 'playwright';
 import { resolveSettings, constrainedFromEnv, bannerLine, PROFILES, CONSTRAINED_ENV } from '../../lib/constrain-profile.mjs';
 import { pickMechanisms, jobCpuRate, windowsCommandLine, constrainedEnv, sandboxedHost, launchConstrained } from '../../lib/constrain.mjs';
 import { startDelayProxy } from '../../lib/constrain-proxy.mjs';
-import { constrainPage, constrainCdp } from '../../lib/constrain-cdp.mjs';
+import { constrainPage, constrainCdp, applyCdpConstraints } from '../../lib/constrain-cdp.mjs';
 import { baseline, within } from '../../lib/constrain-calibrate.mjs';
 import { launchPersistentBrowser } from '../../lib/browser.mjs';
 import { validate } from '../../lib/schema.mjs';
@@ -150,6 +150,34 @@ test("the slow-disk preload slows every style of Node's fs calls", () => {
   assert.ok(ms.stream >= 500, `a 512 KB stream at 1 MB/s took ${ms.stream.toFixed(0)} ms`);
   const plain = spawnSync(process.execPath, [fixture('disk.mjs'), file], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } });
   assert.ok(JSON.parse(plain.stdout).sync < 50, 'without the preload the disk is fast');
+});
+
+test('pages: a page whose throttling gives less than its rate is corrected to the profile\'s factor, as the tree is (#186)', async () => {
+  // A DevTools session whose throttling slows the page by only 0.6 of the rate set, as a macOS runner's late timer wakes
+  // did (2.32× at rate 4, run 44964267014). The calibration loop takes 100 ms unthrottled.
+  let rate = 1;
+  const rates = [];
+  const send = async (method, params) => {
+    if (method === 'Emulation.setCPUThrottlingRate') { rate = params.rate; rates.push(rate); return {}; }
+    if (method === 'Runtime.evaluate') return { result: { value: /return time\(\d+\)/.test(params.expression) ? 100 * (rate === 1 ? 1 : 0.6 * rate) : 1000 } };
+    return {};
+  };
+  const settings = resolveSettings('old-windows-laptop', { network: { latencyMs: 0, downKbps: 0, upKbps: 0 } });
+  const r = await applyCdpConstraints(send, settings, { calibrate: true, network: false });
+  assert.equal(r.cpu.rate, 4, 'the profile\'s factor');
+  assert.ok(within(r.cpu.achieved, 4, 0.05), `corrected to ${r.cpu.achieved}×`);
+  assert.ok(r.cpu.appliedRate > 6 && r.cpu.appliedRate < 7.5, `by setting DevTools' rate to ${r.cpu.appliedRate}`);
+  assert.ok(r.cpu.corrections >= 1);
+  assert.equal(rate, r.cpu.appliedRate, 'and the page is left at that rate');
+  // A throttler that gives its rate needs no correction.
+  const exact = async (method, params) => {
+    if (method === 'Emulation.setCPUThrottlingRate') { rate = params.rate; return {}; }
+    if (method === 'Runtime.evaluate') return { result: { value: /return time\(\d+\)/.test(params.expression) ? 100 * rate : 1000 } };
+    return {};
+  };
+  const e = await applyCdpConstraints(exact, settings, { calibrate: true, network: false });
+  assert.equal(e.cpu.corrections, 0);
+  assert.equal(e.cpu.appliedRate, 4);
 });
 
 test('pages: DevTools throttles CPU about 4× and slows the network', async (t) => {
